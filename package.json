@@ -1,6 +1,6 @@
 {
   "name": "dvdst",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Turn coding-agent sessions into structured development evidence.",
   "type": "module",
   "private": false,
