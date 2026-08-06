@@ -9,7 +9,7 @@ cd ~/Projects/dvdst
 npm install
 ```
 
-The project is private and uses Node.js 22 or newer. It has no runtime dependencies, only `tsx`, `typescript`, and `@types/node` as dev dependencies.
+The project is currently only applicable to omakase-v2 and uses Node.js 22 or newer. It has no runtime dependencies, only `tsx`, `typescript`, and `@types/node` as dev dependencies.
 
 ## 2. Validate the build
 
