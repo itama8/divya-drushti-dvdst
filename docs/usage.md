@@ -5,11 +5,12 @@ This guide shows how to run the probe, the handoff, the devlog mapper, the bench
 ## 1. Install
 
 ```bash
-cd ~/Projects/dvdst
+git clone https://github.com/itama8/divya-drushti-dvdst.git
+cd divya-drushti-dvdst
 npm install
 ```
 
-The project is currently only applicable to omakase-v2 and uses Node.js 22 or newer. It has no runtime dependencies, only `tsx`, `typescript`, and `@types/node` as dev dependencies.
+The current release is built and validated against Pi sessions from the Omakase development corpus and uses Node.js 22 or newer. It has no runtime dependencies, only `tsx`, `typescript`, and `@types/node` as dev dependencies.
 
 ## 2. Validate the build
 
