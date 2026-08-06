@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Turn coding-agent sessions into structured development evidence.",
   "type": "module",
-  "private": true,
+  "private": false,
   "license": "MIT",
   "engines": {
     "node": ">=22"
