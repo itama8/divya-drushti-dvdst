@@ -1,0 +1,180 @@
+[
+  {
+    "id": "docs-reconciliation",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-08-03T22-23-26-179Z_019fc9b9-83e3-7d68-9d33-db78c83c576f.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-08-04-s02.md",
+    "expected": {
+      "status": "accepted",
+      "phase": "docs-spine",
+      "checkpoint": "recent-feature-docs-reconciliation"
+    },
+    "observed": {
+      "status": "accepted",
+      "outcome": "no-test-evidence",
+      "modified": [
+        ".devlog/2026-08-04-s02.md",
+        "README.md",
+        "docs/architecture/current-state.md",
+        "docs/architecture/target-seams.md",
+        "docs/context-map.md",
+        "docs/documentation-map.md",
+        "docs/features/feature-surface-index.md",
+        "docs/plans/active/hud-responsive-layout-stabilization-plan.md",
+        "docs/plans/active/native-css-ui-simplification-plan.md",
+        "docs/plans/active/sushi-context-compilation-plan.md",
+        "docs/plans/active/sushi-memory-recollection-plan.md",
+        "docs/plans/active/voice-input-channel-plan.md",
+        "docs/plans/checkpoint-map.md",
+        "docs/plans/plan-index.md",
+        "docs/product/current-app.md",
+        "docs/product/roadmap.md"
+      ],
+      "readCount": 30,
+      "commands": 13,
+      "failedCommands": 0,
+      "tests": 0,
+      "commitsMatched": [
+        "75dcc403093a83779828ba3d1e10b440e36415ac"
+      ],
+      "commitsExpected": [
+        "75dcc403093a83779828ba3d1e10b440e36415ac",
+        "75dcc403093a83779828ba3d1e10b440e36415ac"
+      ],
+      "skills": [
+        "omakase-session-orient",
+        "doc-writer",
+        "omakase-checkpoint-map",
+        "omakase-session-handoff",
+        "omakase-checkpoint-closeout"
+      ],
+      "explicitSkillCommands": 0,
+      "attributedRecords": 159
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": [
+        "75dcc403093a83779828ba3d1e10b440e36415ac"
+      ]
+    },
+    "sizes": {
+      "source": 687118
+    }
+  },
+  {
+    "id": "sushi-reference",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-08-04T08-57-56-564Z_019fcbfe-6c54-718b-822d-79d56f2505c8.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-08-04-s03.md",
+    "expected": {
+      "status": "closed",
+      "phase": "sushi-reference",
+      "checkpoint": "greenfield-reference-library"
+    },
+    "observed": {
+      "status": "closed",
+      "outcome": "unresolved-failure",
+      "modified": [
+        ".devlog/2026-08-04-s03.md",
+        "docs/plans/active/sushi-user-manual-system-notes-plan.md",
+        "docs/plans/checkpoint-map.md",
+        "scripts/sushi-harness-test.mjs",
+        "scripts/system-notes-smoke.mjs",
+        "src/main.ts",
+        "src/renderer.ts",
+        "src/resources/system-notes/sushi-manual/appearance.md",
+        "src/resources/system-notes/sushi-manual/capabilities-and-safety.md",
+        "src/resources/system-notes/sushi-manual/cards-and-artifacts.md",
+        "src/resources/system-notes/sushi-manual/commands-and-keybindings.md",
+        "src/resources/system-notes/sushi-manual/editor-and-notes.md",
+        "src/resources/system-notes/sushi-manual/images-and-pdfs.md",
+        "src/resources/system-notes/sushi-manual/overview.md",
+        "src/resources/system-notes/sushi-manual/quickstart.md",
+        "src/resources/system-notes/sushi-manual/search-and-research.md",
+        "src/resources/system-notes/sushi-manual/sushi.md",
+        "src/sushi/context-package/dynamic-context.ts",
+        "src/sushi/context-package/types.ts",
+        "src/sushi/harness-types.ts",
+        "src/sushi/harness/model-package.ts",
+        "src/sushi/model-callable-read-tools.ts",
+        "src/sushi/runtime.ts",
+        "src/system-notes/registry.ts"
+      ],
+      "readCount": 45,
+      "commands": 38,
+      "failedCommands": 3,
+      "tests": 8,
+      "commitsMatched": [
+        "f8052a2e676e50102cfb4078e2d7ee8ead960c05"
+      ],
+      "commitsExpected": [
+        "f8052a2e676e50102cfb4078e2d7ee8ead960c05",
+        "f8052a2e676e50102cfb4078e2d7ee8ead960c05"
+      ],
+      "skills": [
+        "omakase-session-orient",
+        "doc-writer",
+        "omakase-cross-seam-plan",
+        "omakase-implement",
+        "omakase-session-handoff",
+        "omakase-checkpoint-closeout"
+      ],
+      "explicitSkillCommands": 0,
+      "attributedRecords": 301
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": [
+        "f8052a2e676e50102cfb4078e2d7ee8ead960c05"
+      ]
+    },
+    "sizes": {
+      "source": 889578
+    }
+  },
+  {
+    "id": "move-website",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-08-04T15-47-07-238Z_019fcd75-0966-7ffe-bd2f-b1894900ba16.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-08-04-s07.md",
+    "expected": {
+      "status": "stable",
+      "phase": "website-experience",
+      "checkpoint": "WEB-repo-split"
+    },
+    "observed": {
+      "status": "accepted",
+      "outcome": "unresolved-failure",
+      "modified": [
+        ".devlog/2026-08-04-s07.md",
+        "/tmp/omakase-website-build/README.md",
+        "/tmp/omakase-website-build/website-experience-plan.md",
+        "docs/plans/active/testing-release-and-patron-program-plan.md",
+        "docs/plans/checkpoint-map.md",
+        "docs/plans/plan-index.md",
+        "docs/reference/external-repository-resource-report.md"
+      ],
+      "readCount": 3,
+      "commands": 20,
+      "failedCommands": 1,
+      "tests": 0,
+      "commitsMatched": [],
+      "commitsExpected": [],
+      "skills": [
+        "omakase-checkpoint-map"
+      ],
+      "explicitSkillCommands": 0,
+      "attributedRecords": 55
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": []
+    },
+    "sizes": {
+      "source": 197264
+    }
+  }
+]

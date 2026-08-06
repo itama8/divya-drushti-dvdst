@@ -1,0 +1,26 @@
+{
+  "name": "dvdst",
+  "version": "0.0.0",
+  "description": "Turn coding-agent sessions into structured development evidence.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "probe": "tsx src/cli/probe.ts",
+    "handoff": "tsx src/cli/handoff.ts",
+    "handoff-devlog": "tsx src/cli/handoff-devlog.ts",
+    "sessions": "tsx src/cli/sessions.ts",
+    "records": "tsx src/cli/records.ts",
+    "dvdst": "tsx src/cli/dvdst.ts",
+    "test": "tsx --test test/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.5",
+    "typescript": "^7.0.2"
+  }
+}
