@@ -22,7 +22,7 @@ npm test
 You should see:
 
 - `npm run typecheck` exit with no errors.
-- `npm test` report 26 tests across 9 suites, all passing.
+- `npm test` report 30 tests across 10 suites, all passing.
 
 ## 3. Run the probe on a real session
 
@@ -164,6 +164,14 @@ npm run --silent dvdst -- ingest --live .dvdst/live/<session-id>.jsonl --store .
 
 See `docs/session-ingestion.md` for the store layout, change detection rules, and failure safety.
 
+Normalize a stored session into derived records:
+
+```bash
+npm run --silent dvdst -- normalize "$SESSION" --store .dvdst/store
+```
+
+The command ingests the file if needed, then writes `records/entries.jsonl`, `messages.jsonl`, `tool-invocations.jsonl`, `tool-results.jsonl`, and `timeline.jsonl` plus `derived.json` into the snapshot. Payloads at or above 64 KiB move to `store/blobs/`. Re-running the command rewrites identical records. Orphan tool calls and results appear in the derived diagnostics.
+
 ## 8. Run the benchmark
 
 The benchmark runs the probe and handoff against three real Omakase cases and writes a markdown report.
@@ -210,6 +218,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/normalize-paths.ts` | map absolute paths to project-relative paths |
 | `src/pi/parse-devlog.ts` | parse Omakase devlog frontmatter |
 | `src/pi/sessions.ts` | discover Pi session files in a directory |
+| `src/normalize/normalize.ts` | normalize entries, messages, tools, and timeline into records |
 | `src/store/ingest-session.ts` | stream Pi session files into content-addressed snapshots |
 | `src/store/read-session.ts` | read a stored session snapshot and its manifest |
 | `src/store/ingest-live.ts` | snapshot one live event stream |
@@ -227,6 +236,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/cli/records.ts` | CLI for files, commands, and skills streams |
 | `src/cli/trace.ts` | CLI to look up the provenance of a single record |
 | `src/cli/ingest.ts` | CLI to ingest session files or one live stream |
+| `src/cli/normalize.ts` | CLI to normalize a stored session |
 | `src/cli/live.ts` | CLI to convert a live event stream to observed evidence |
 | `src/cli/export.ts` | CLI to export evidence as markdown or CSV |
 | `src/cli/timeline.ts` | CLI to read stored timeline evidence |

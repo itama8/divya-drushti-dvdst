@@ -8,6 +8,7 @@ const commands: Record<string, string> = {
   live: "live.ts",
   export: "export.ts",
   ingest: "ingest.ts",
+  normalize: "normalize.ts",
   timeline: "timeline.ts",
   handoff: "handoff.ts",
   "handoff-devlog": "handoff-devlog.ts",

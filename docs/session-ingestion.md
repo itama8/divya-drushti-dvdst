@@ -89,6 +89,60 @@ Ingestion never changes the source file. It only reads it.
 
 Snapshots are written to a temporary directory and renamed into place. An interrupted write leaves the previous snapshot readable. `latest.json` updates only after the new snapshot is complete. Store files use private permissions (`0o700` directories, `0o600` files).
 
+## Normalized records
+
+`dvdst normalize` reads a stored snapshot and writes derived records beside the raw source:
+
+```bash
+npm run --silent dvdst -- normalize \
+  ~/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/<session>.jsonl \
+  --store .dvdst/store
+```
+
+With a session file, the command ingests it first (a repeat reports `unchanged` and writes nothing), then normalizes the latest snapshot. To normalize an already stored session:
+
+```bash
+npm run --silent dvdst -- normalize \
+  --store .dvdst/store --session <session-id>
+```
+
+The snapshot gains a `records/` directory and `derived.json`:
+
+```text
+snapshots/<sha256>/
+├── manifest.json
+├── derived.json
+├── source/
+│   ├── raw.jsonl
+│   └── source-state.json
+└── records/
+    ├── entries.jsonl
+    ├── messages.jsonl
+    ├── tool-invocations.jsonl
+    ├── tool-results.jsonl
+    └── timeline.jsonl
+```
+
+- `entries.jsonl`: one record per source entry with its type, parent link, timestamp, provenance, and the original value
+- `messages.jsonl`: conversation view with role, readable text, and tool-call or thinking flags
+- `tool-invocations.jsonl`: tool calls with their arguments
+- `tool-results.jsonl`: tool results keyed by tool call ID
+- `timeline.jsonl`: append-order index that joins the other streams
+
+Every record carries the source line and byte range. `derived.json` records extractor version, counts, and diagnostics. It lists orphan tool calls and orphan results when a result is missing or a result has no matching call.
+
+Payloads at or above 64 KiB move to the shared content-addressed store:
+
+```text
+store/
+└── blobs/
+    └── sha256/<two-hex-prefix>/<sha256>
+```
+
+The blob holds the exact payload bytes. The referencing record keeps `{blob, bytes}` instead of the text, so a consumer can read conversation text without loading large tool output. Equal payloads share one blob, locally: no network calls happen during normalization.
+
+The extractor is deterministic and idempotent. Re-running it rewrites identical records and never touches `source/raw.jsonl`. The named record streams are the CP2 deliverable; file, search, command, and test artifacts build on them in a later checkpoint.
+
 ## Limits
 
-This path preserves source only. It does not normalize entries, pair tool calls, or classify commands. Those extractors run later and read from the preserved snapshots. It does not record byte ranges yet; line and byte provenance for normalized records is a later checkpoint.
+Ingestion itself preserves source only. Normalization is a separate, repeatable step that reads the preserved snapshot. It does not yet classify commands, extract file artifacts, or attribute skill spans; those extractors run later and read the same records and blobs. It also does not compute branch depth or selected-branch views; parent links and append order are preserved so a consumer can reconstruct ancestry without replaying the raw file.
