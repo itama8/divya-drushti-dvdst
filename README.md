@@ -2,7 +2,7 @@
 
 `dvdst` turns coding-agent sessions into structured development evidence.
 
-The first adapter ingests Pi sessions from Omakase. The first release exposes messages, tool activity, file activity, commands, tests, skill invocations, attributed skill spans, and provenance as JSONL.
+The first adapter ingests Pi sessions from Omakase. It also accepts append-only live event streams from a running session. The first release exposes messages, tool activity, file activity, commands, tests, skill invocations, attributed skill spans, and provenance as JSONL.
 
 ## Quick start
 
@@ -22,6 +22,7 @@ For concrete commands and real Omakase examples, read [`docs/usage.md`](docs/usa
 - [`docs/project-plan.md`](docs/project-plan.md) - scope, checkpoints, and completion criteria.
 - [`docs/pi-session-source.md`](docs/pi-session-source.md) - findings from the Pi source format and the Omakase session corpus.
 - [`docs/evidence-model.md`](docs/evidence-model.md) - the first storage and provenance design.
+- [`docs/live-streams.md`](docs/live-streams.md) - the live event contract and Pi extension adapter.
 
 ## Product boundary
 

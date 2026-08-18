@@ -5,6 +5,10 @@ import { dirname, join } from "node:path";
 
 const commands: Record<string, string> = {
   probe: "probe.ts",
+  live: "live.ts",
+  export: "export.ts",
+  ingest: "ingest.ts",
+  timeline: "timeline.ts",
   handoff: "handoff.ts",
   "handoff-devlog": "handoff-devlog.ts",
   sessions: "sessions.ts",
