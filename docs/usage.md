@@ -22,7 +22,7 @@ npm test
 You should see:
 
 - `npm run typecheck` exit with no errors.
-- `npm test` report 11 tests across 5 suites, all passing.
+- `npm test` report 26 tests across 9 suites, all passing.
 
 ## 3. Run the probe on a real session
 
@@ -135,7 +135,36 @@ npm run dvdst -- trace "$SESSION" --id run-test
 
 All four inspection commands support `--format json` for structured pipelines.
 
-## 7. Run the benchmark
+## 7. Ingest sessions into the evidence store
+
+Ingest preserves the raw Pi session file and a manifest in a content-addressed snapshot. A repeated unchanged ingestion performs no writes.
+
+```bash
+npm run --silent dvdst -- ingest "$SESSION" --store .dvdst/store
+```
+
+The result line reports the session ID, source hash, and change class (`initial`, `append`, `replacement`, or `truncation`). Run the same command again to see `unchanged`.
+
+Discover and ingest the whole corpus in one pipe:
+
+```bash
+npm run --silent dvdst -- sessions \
+  "$HOME/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--" \
+  --format jsonl \
+| npm run --silent dvdst -- ingest --store .dvdst/store
+```
+
+The stdin reader accepts JSON descriptors, plain paths, and TSV rows. It skips the TSV header row.
+
+Ingest one live event stream the same way:
+
+```bash
+npm run --silent dvdst -- ingest --live .dvdst/live/<session-id>.jsonl --store .dvdst/store
+```
+
+See `docs/session-ingestion.md` for the store layout, change detection rules, and failure safety.
+
+## 8. Run the benchmark
 
 The benchmark runs the probe and handoff against three real Omakase cases and writes a markdown report.
 
@@ -161,7 +190,7 @@ To add a new case, append it to `scripts/benchmark-cases.json`:
 
 Then re-run the benchmark. The status field uses the same values the devlog frontmatter uses: `accepted`, `closed`, `stable`, `user-testing`, `blocked`, `regressed`, or `planned`.
 
-## 8. Run a one-off smoke test
+## 9. Run a one-off smoke test
 
 The fixture under `test/fixtures/` makes it safe to test without touching real sessions.
 
@@ -181,6 +210,13 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/normalize-paths.ts` | map absolute paths to project-relative paths |
 | `src/pi/parse-devlog.ts` | parse Omakase devlog frontmatter |
 | `src/pi/sessions.ts` | discover Pi session files in a directory |
+| `src/store/ingest-session.ts` | stream Pi session files into content-addressed snapshots |
+| `src/store/read-session.ts` | read a stored session snapshot and its manifest |
+| `src/store/ingest-live.ts` | snapshot one live event stream |
+| `src/store/read-live.ts` | read a stored live snapshot |
+| `src/store/fs-util.ts` | atomic writes and path helpers for the store |
+| `src/live/decompose.ts` | validate live events and emit observed evidence |
+| `src/export/render.ts` | render evidence as markdown or CSV |
 | `src/probe/build-bundle.ts` | build the full evidence bundle from a session and optional devlog |
 | `src/handoff/summary.ts` | reduce the bundle to a compact handoff summary and text view |
 | `src/devlog/format-devlog.ts` | map a handoff summary back to an Omakase devlog draft |
@@ -190,8 +226,16 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/cli/sessions.ts` | CLI to list Pi session files |
 | `src/cli/records.ts` | CLI for files, commands, and skills streams |
 | `src/cli/trace.ts` | CLI to look up the provenance of a single record |
+| `src/cli/ingest.ts` | CLI to ingest session files or one live stream |
+| `src/cli/live.ts` | CLI to convert a live event stream to observed evidence |
+| `src/cli/export.ts` | CLI to export evidence as markdown or CSV |
+| `src/cli/timeline.ts` | CLI to read stored timeline evidence |
 | `src/cli/dvdst.ts` | dispatcher that routes every subcommand |
+| `examples/pi-extension/dvdst-live.ts` | observe-only Pi extension that writes live events |
 | `scripts/run-benchmark.mjs` | run all benchmark cases and write the report |
 | `scripts/benchmark-cases.json` | list of real Omakase sessions used by the benchmark |
 | `docs/benchmark-report.md` | latest benchmark output |
 | `docs/cp0-benchmark.md` | narrative summary of the CP0 product proof |
+| `docs/evidence-model.md` | storage and provenance design |
+| `docs/live-streams.md` | live event contract and Pi extension adapter |
+| `docs/session-ingestion.md` | session store design and commands |

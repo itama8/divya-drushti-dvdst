@@ -23,6 +23,7 @@ For concrete commands and real Omakase examples, read [`docs/usage.md`](docs/usa
 - [`docs/pi-session-source.md`](docs/pi-session-source.md) - findings from the Pi source format and the Omakase session corpus.
 - [`docs/evidence-model.md`](docs/evidence-model.md) - the first storage and provenance design.
 - [`docs/live-streams.md`](docs/live-streams.md) - the live event contract and Pi extension adapter.
+- [`docs/session-ingestion.md`](docs/session-ingestion.md) - the session store: snapshots, change detection, and failure safety.
 
 ## Product boundary
 

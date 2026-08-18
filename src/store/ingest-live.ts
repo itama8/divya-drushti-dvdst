@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdir, rename, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import { LiveDecomposer, parseLiveEvent } from "../live/decompose.js";
+import { exists, sourceSegment, writeAtomic } from "./fs-util.js";
 
 export interface LiveIngestResult {
   schemaVersion: 1;
@@ -13,20 +14,6 @@ export interface LiveIngestResult {
   sourceHash: string;
   events: number;
   snapshot: string;
-}
-
-function sourceSegment(value: string): string {
-  return encodeURIComponent(value);
-}
-
-async function exists(path: string): Promise<boolean> {
-  return stat(path).then(() => true).catch(() => false);
-}
-
-async function writeAtomic(path: string, content: string): Promise<void> {
-  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(temporary, content, { mode: 0o600 });
-  await rename(temporary, path);
 }
 
 export async function ingestLiveEvidence(input: string, inputPath: string | undefined, store: string): Promise<LiveIngestResult> {
