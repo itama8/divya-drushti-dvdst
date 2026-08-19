@@ -74,6 +74,14 @@ jq -c 'select(.kind | startswith("finding")) | {kind, path, label}' "$SNAPSHOT/e
 echo "-- command outcome events --"
 jq -c 'select(.kind == "command-succeeded") | {kind, command}' "$SNAPSHOT/events/deterministic.jsonl"
 
+step "10. skill invocations + attributions from a stored session"
+npm run --silent dvdst -- skills --store "$STORE" --session fixture-session --view spans --format json \
+  | jq -e 'length > 0 and .[0].name == "doc-check" and .[0].loadStatus == "loaded" and .[0].boundaryRule == "same-agent-turn"' > /dev/null \
+  && echo "OK: doc-check invocation loaded with a same-agent-turn span"
+npm run --silent dvdst -- skills --store "$STORE" --session fixture-session --view attributions --format json \
+  | jq -e 'length >= 4' > /dev/null \
+  && echo "OK: attributions include the skill-load and within-turn-window records"
+
 step "done"
 if [[ "${DVDST_SMOKE_KEEP:-0}" == "1" ]]; then
   echo "store kept at: $STORE"

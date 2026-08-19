@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { guardStdout } from "./stdout.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
+import { normalizeSnapshot } from "../normalize/normalize.js";
+import { extractSkills } from "../skills/extract.js";
+import { exists } from "../store/fs-util.js";
 import { readSessionSnapshot } from "../store/read-session.js";
 
 guardStdout();
@@ -10,9 +14,10 @@ guardStdout();
 const DEFAULT_STORE = ".dvdst/store";
 
 function usage(): never {
-  console.error("Usage: dvdst files [<session.jsonl> | --store <dir> --session <id>] [--path <substring>] [--format json|tsv]");
-  console.error("       dvdst commands [<session.jsonl> | --store <dir> --session <id>] [--class <test|typecheck|build|lint|dependency>] [--format json|tsv]");
-  console.error("       dvdst skills <session.jsonl> [--format json|tsv]");
+  console.error("Usage: dvdst files <session.jsonl> [--path <substring>] [--format json|tsv]");
+  console.error("       dvdst commands <session.jsonl> [--class <test|typecheck|build|lint|dependency>] [--format json|tsv]");
+  console.error("       dvdst skills \"<session.jsonl> | --store <dir> --session <id>\" [--view invocations|attributions] [--format json|tsv]");
+  console.error("See docs/usage.md for the store-mode forms of files and commands.");
   process.exit(2);
 }
 
@@ -83,6 +88,65 @@ async function commandsFromStore(store: string, sessionId: string, snapshot: str
   else emitTsv(["toolCallId", "class", "succeeded", "commandBytes", "resultBytes", "command"], commands.map((command) => [command.toolCallId, command.classes.join("|"), command.result ? (command.result.isError ? "no" : "yes") : "?", command.commandBytes, command.result?.outputBytes ?? 0, command.commandPreview]));
 }
 
+async function skillsFromStore(store: string, sessionId: string, snapshot: string | undefined, view: string, format: "json" | "tsv"): Promise<void> {
+  const snapshotInfo = await readSessionSnapshot({ store, sessionId, ...(snapshot === undefined ? {} : { sourceHash: snapshot }) });
+  if (!(await exists(join(snapshotInfo.path, "records", "entries.jsonl")))) {
+    await normalizeSnapshot({ store, sessionId, sourceHash: snapshotInfo.sourceHash });
+  }
+  const invocationsPath = join(snapshotInfo.path, "records", "skill-invocations.jsonl");
+  if (!(await exists(invocationsPath))) {
+    await extractSkills({ store, sessionId, sourceHash: snapshotInfo.sourceHash });
+  }
+  const invocations = parseJsonlRows(await readFile(invocationsPath, "utf8"), "skill-invocations.jsonl");
+
+  if (view === "spans") {
+    const spans = invocations
+      .map((invocation) => ({
+        id: invocation.id,
+        name: invocation.name,
+        mode: invocation.mode,
+        loadStatus: invocation.loadStatus,
+        turn: invocation.turn,
+        activeStartLine: invocation.activeStartLine ?? null,
+        activeEndLine: invocation.activeEndLine,
+        boundaryRule: invocation.boundaryRule,
+      }))
+      .sort((left, right) => String(left.id).localeCompare(String(right.id)));
+    if (format === "json") process.stdout.write(`${JSON.stringify(spans, null, 2)}\n`);
+    else emitTsv(["id", "name", "mode", "loadStatus", "turn", "activeStartLine", "activeEndLine", "boundaryRule"], spans.map((span) => [span.id, span.name, span.mode, span.loadStatus, span.turn, span.activeStartLine ?? "", span.activeEndLine, span.boundaryRule]));
+    return;
+  }
+
+  if (view === "attributions") {
+    const attributions = parseJsonlRows(await readFile(join(snapshotInfo.path, "records", "skill-attributions.jsonl"), "utf8"), "skill-attributions.jsonl");
+    const rowsOut = attributions.map((attribution) => ({
+      recordKind: attribution.recordKind,
+      recordId: attribution.recordId,
+      ...(typeof attribution.role === "string" ? { role: attribution.role } : {}),
+      ...(typeof attribution.toolName === "string" ? { toolName: attribution.toolName } : {}),
+      labels: attribution.labels as unknown,
+    }));
+    if (format === "json") process.stdout.write(`${JSON.stringify(rowsOut, null, 2)}\n`);
+    else emitTsv(["recordKind", "recordId", "labels"], rowsOut.map((row) => [row.recordKind, row.recordId, (row.labels as Array<{ invocationId: string; basis: string }>).map((label) => label.basis).join(",")]));
+    return;
+  }
+
+  const skills = invocations.map((invocation) => ({
+    id: invocation.id,
+    name: invocation.name,
+    mode: invocation.mode,
+    confidence: invocation.confidence,
+    loadStatus: invocation.loadStatus,
+    contentHash: invocation.contentHash,
+    contentBytes: invocation.contentBytes,
+    turn: invocation.turn,
+    activeStartLine: invocation.activeStartLine as number | null | undefined,
+    activeEndLine: invocation.activeEndLine,
+  }));
+  if (format === "json") process.stdout.write(`${JSON.stringify(skills, null, 2)}\n`);
+  else emitTsv(["id", "name", "mode", "confidence", "loadStatus", "contentBytes", "turn", "activeStartLine", "activeEndLine"], skills.map((skill) => [skill.id, skill.name, skill.mode, skill.confidence, skill.loadStatus, skill.contentBytes, skill.turn, skill.activeStartLine ?? "", skill.activeEndLine]));
+}
+
 async function main(): Promise<void> {
   // The dispatcher calls this script with: node --import tsx records.ts <subcommand> [session] [options]
   const subcommand = process.argv[2];
@@ -97,6 +161,7 @@ async function main(): Promise<void> {
     options: {
       path: { type: "string" },
       class: { type: "string" },
+      view: { type: "string", default: "invocations" },
       store: { type: "string", short: "s" },
       session: { type: "string" },
       snapshot: { type: "string" },
@@ -114,7 +179,9 @@ async function main(): Promise<void> {
   if (storeMode && sessionPath !== undefined) usage();
   if (storeMode && (values.store === undefined || values.session === undefined)) usage();
   if (!storeMode && (sessionPath === undefined || sessionPath.startsWith("-"))) usage();
-  if (subcommand === "skills" && storeMode) usage();
+  if (subcommand === "skills" && !["invocations", "spans", "attributions"].includes(values.view!)) usage();
+  if (subcommand === "files" && values.view !== "invocations") usage();
+  if (subcommand === "commands" && values.view !== "invocations") usage();
 
   if (storeMode) {
     const store = values.store!;
@@ -123,6 +190,8 @@ async function main(): Promise<void> {
       await filesFromStore(store, sessionId, values.snapshot, values.path, format);
     } else if (subcommand === "commands") {
       await commandsFromStore(store, sessionId, values.snapshot, values.class, format);
+    } else {
+      await skillsFromStore(store, sessionId, values.snapshot, values.view!, format);
     }
     return;
   }

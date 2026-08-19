@@ -25,6 +25,7 @@ For concrete commands and real Omakase examples, read [`docs/usage.md`](docs/usa
 - [`docs/live-streams.md`](docs/live-streams.md) - the live event contract and Pi extension adapter.
 - [`docs/session-ingestion.md`](docs/session-ingestion.md) - the session store: snapshots, change detection, and failure safety.
 - [`docs/events.md`](docs/events.md) - deterministic events, derived findings, and jq recipes.
+- [`docs/skills.md`](docs/skills.md) - skill invocation detection, attribution windows, and queries.
 
 ## Product boundary
 

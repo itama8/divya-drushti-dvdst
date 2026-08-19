@@ -127,6 +127,16 @@ List every skill invocation with its content hash and active line range:
 npm run dvdst -- skills "$SESSION"
 ```
 
+Query the same streams from the evidence store, with load status and three views
+(invocations, spans, attributions):
+
+```bash
+npm run --silent dvdst -- skills --store .dvdst/store --session <session-id> \
+  --view spans --format json
+npm run --silent dvdst -- skills --store .dvdst/store --session <session-id> \
+  --view attributions --format tsv
+```
+
 Look up the provenance of a specific record by its ID:
 
 ```bash
@@ -256,6 +266,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/sessions.ts` | discover Pi session files in a directory |
 | `src/normalize/normalize.ts` | normalize entries, messages, tools, and timeline into records |
 | `src/artifacts/extract.ts` | extract file, command, search, and test artifacts from records |
+| `src/skills/extract.ts` | detect skill invocations and attribute same-turn spans from normalized records |
 | `src/events/extract.ts` | derive deterministic command, file, and finding records from artifacts |
 | `src/store/ingest-session.ts` | stream Pi session files into content-addressed snapshots |
 | `src/store/read-session.ts` | read a stored session snapshot and its manifest |
