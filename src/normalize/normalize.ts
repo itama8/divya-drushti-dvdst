@@ -86,6 +86,16 @@ async function deblobContent(content: unknown, writer: BlobWriter): Promise<{ va
   if (!Array.isArray(content)) return { value: content, refs };
   const blocks: unknown[] = [];
   for (const block of content) {
+    if (isObject(block) && block.type === "toolCall") {
+      // Keep tool calls structural at all sizes; deblob only their large
+      // string arguments so the call stays queryable by id, name, and path.
+      if (isObject(block.arguments)) {
+        blocks.push({ ...block, arguments: await deblobArguments(block.arguments, writer) });
+      } else {
+        blocks.push(block);
+      }
+      continue;
+    }
     if (isObject(block) && typeof block.text === "string") {
       const bytes = Buffer.byteLength(block.text);
       if (bytes >= BLOB_THRESHOLD_BYTES) {
@@ -107,12 +117,23 @@ async function deblobContent(content: unknown, writer: BlobWriter): Promise<{ va
   return { value: blocks, refs };
 }
 
+/**
+ * Replaces large string arguments with blob references, keeping the argument
+ * keys intact so consumers can still read fields such as path or command.
+ */
 async function deblobArguments(args: unknown, writer: BlobWriter): Promise<unknown> {
   if (!isObject(args)) return args;
-  const bytes = serializedBytes(args);
-  if (bytes < BLOB_THRESHOLD_BYTES) return args;
-  const blob = await writer.write(Buffer.from(JSON.stringify(args), "utf8"));
-  return { blob, bytes };
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value === "string" && Buffer.byteLength(value) >= BLOB_THRESHOLD_BYTES) {
+      const bytes = Buffer.byteLength(value);
+      const blob = await writer.write(Buffer.from(value, "utf8"));
+      result[key] = { blob, bytes };
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function textFromContent(content: unknown): string {

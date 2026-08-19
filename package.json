@@ -14,6 +14,7 @@
     "export": "tsx src/cli/export.ts",
     "ingest": "tsx src/cli/ingest.ts",
     "normalize": "tsx src/cli/normalize.ts",
+    "artifacts": "tsx src/cli/artifacts.ts",
     "timeline": "tsx src/cli/timeline.ts",
     "handoff": "tsx src/cli/handoff.ts",
     "handoff-devlog": "tsx src/cli/handoff-devlog.ts",

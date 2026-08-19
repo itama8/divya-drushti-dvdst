@@ -143,6 +143,50 @@ The blob holds the exact payload bytes. The referencing record keeps `{blob, byt
 
 The extractor is deterministic and idempotent. Re-running it rewrites identical records and never touches `source/raw.jsonl`. The named record streams are the CP2 deliverable; file, search, command, and test artifacts build on them in a later checkpoint.
 
+## Tool artifacts
+
+`dvdst artifacts` turns the normalized tool records into tool-specific evidence:
+
+```bash
+npm run --silent dvdst -- artifacts \
+  ~/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/<session>.jsonl \
+  --store .dvdst/store
+```
+
+With a session file, the command ingests it first, then normalizes if needed, then extracts artifacts. It also accepts an already stored session:
+
+```bash
+npm run --silent dvdst -- artifacts --store .dvdst/store --session <session-id>
+```
+
+The snapshot gains an `artifacts/` directory and `derived-artifacts.json`:
+
+```text
+snapshots/<sha256>/
+├── manifest.json
+├── derived.json          normalization extractor output
+├── derived-artifacts.json  artifact extractor output
+├── source/…
+├── records/…
+└── artifacts/
+    ├── file-reads.jsonl      read calls with requested range and returned bytes
+    ├── file-mutations.jsonl  edit and write calls with their patches
+    ├── searches.jsonl        web and search-style tools
+    ├── commands.jsonl        bash calls with output and classification
+    ├── tests.jsonl           commands classified as tests
+    └── unknown-tools.jsonl   every other tool, never dropped
+```
+
+Mutation records state whether the patch is observed from the arguments or reconstructed, and never claim an exact final diff without repository before-and-after state. Commands are classified deterministically as test, typecheck, build, lint, or dependency; each classification records its rule reason and the classifier version, so the result is auditable and reproducible. Orphan calls and results stay visible in the derived diagnostics. Large command output and write bodies are already blob-referenced by the normalizer, so artifact records stay small.
+
+Query the artifacts from the store without the source file:
+
+```bash
+npm run --silent dvdst -- files --store .dvdst/store --session <session-id> --format json
+npm run --silent dvdst -- commands --store .dvdst/store --session <session-id> --class test
+npm run --silent dvdst -- commands --store .dvdst/store --session <session-id> --class typecheck | jq -c 'select(.result.isError)'
+```
+
 ## Limits
 
 Ingestion itself preserves source only. Normalization is a separate, repeatable step that reads the preserved snapshot. It does not yet classify commands, extract file artifacts, or attribute skill spans; those extractors run later and read the same records and blobs. It also does not compute branch depth or selected-branch views; parent links and append order are preserved so a consumer can reconstruct ancestry without replaying the raw file.

@@ -22,7 +22,7 @@ npm test
 You should see:
 
 - `npm run typecheck` exit with no errors.
-- `npm test` report 30 tests across 10 suites, all passing.
+- `npm test` report 34 tests across 10 suites, all passing.
 
 ## 3. Run the probe on a real session
 
@@ -172,6 +172,19 @@ npm run --silent dvdst -- normalize "$SESSION" --store .dvdst/store
 
 The command ingests the file if needed, then writes `records/entries.jsonl`, `messages.jsonl`, `tool-invocations.jsonl`, `tool-results.jsonl`, and `timeline.jsonl` plus `derived.json` into the snapshot. Payloads at or above 64 KiB move to `store/blobs/`. Re-running the command rewrites identical records. Orphan tool calls and results appear in the derived diagnostics.
 
+Extract tool artifacts from the normalized records:
+
+```bash
+npm run --silent dvdst -- artifacts "$SESSION" --store .dvdst/store
+```
+
+The command ingests and normalizes if needed, then writes `artifacts/file-reads.jsonl`, `file-mutations.jsonl`, `searches.jsonl`, `commands.jsonl`, `tests.jsonl`, and `unknown-tools.jsonl` plus `derived-artifacts.json` into the snapshot. Query them from the store:
+
+```bash
+npm run --silent dvdst -- files --store .dvdst/store --session <session-id> --format json
+npm run --silent dvdst -- commands --store .dvdst/store --session <session-id> --class typecheck
+```
+
 ## 8. Run the benchmark
 
 The benchmark runs the probe and handoff against three real Omakase cases and writes a markdown report.
@@ -219,6 +232,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/parse-devlog.ts` | parse Omakase devlog frontmatter |
 | `src/pi/sessions.ts` | discover Pi session files in a directory |
 | `src/normalize/normalize.ts` | normalize entries, messages, tools, and timeline into records |
+| `src/artifacts/extract.ts` | extract file, command, search, and test artifacts from records |
 | `src/store/ingest-session.ts` | stream Pi session files into content-addressed snapshots |
 | `src/store/read-session.ts` | read a stored session snapshot and its manifest |
 | `src/store/ingest-live.ts` | snapshot one live event stream |
@@ -237,6 +251,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/cli/trace.ts` | CLI to look up the provenance of a single record |
 | `src/cli/ingest.ts` | CLI to ingest session files or one live stream |
 | `src/cli/normalize.ts` | CLI to normalize a stored session |
+| `src/cli/artifacts.ts` | CLI to extract tool artifacts from a stored session |
 | `src/cli/live.ts` | CLI to convert a live event stream to observed evidence |
 | `src/cli/export.ts` | CLI to export evidence as markdown or CSV |
 | `src/cli/timeline.ts` | CLI to read stored timeline evidence |
