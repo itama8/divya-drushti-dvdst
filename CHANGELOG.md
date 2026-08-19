@@ -1,0 +1,64 @@
+# Changelog
+
+## 0.1.0 - first release
+
+`dvdst` turns Pi coding-agent sessions into structured, deterministic
+development evidence. This release covers the full evidence pipeline for the
+Omakase corpus, tested fixtures, and a measured production run.
+
+### Pipeline
+
+- `dvdst ingest` - content-addressed raw snapshots of Pi session files with
+  append, replacement, truncation, and unchanged change detection. Write to a
+  temporary snapshot directory, rename into place, retry-safe.
+- `dvdst normalize` - messages, tool calls, tool results, and an append-order
+  timeline; large payloads move to a shared SHA-256 blob store; orphan calls
+  and results stay visible as diagnostics.
+- `dvdst artifacts` - file reads, file mutations, searches, commands, tests,
+  and unknown tools. Mutation records state whether a patch is observed,
+  reconstructed, or inferred, and never claim an exact final diff without
+  repository state.
+- `dvdst skills` - explicit `/skill:` commands and model `SKILL.md` loads with
+  historical content hashes, plus conservative same-turn attribution that
+  keeps overlaps and explains each label.
+- `dvdst events` - deterministic command-succeeded, command-failed, file-read,
+  and file-mutation events plus three findings: file modified without an
+  observed prior read, tests not run after the final mutation, and unresolved
+  command failure with exact-text retry matching.
+- `dvdst live` - converts an append-only live event stream from the Pi
+  extension into observed evidence.
+- `dvdst handoff` / `dvdst handoff-devlog` - compact closeout summary and an
+  Omakase devlog draft from structured evidence, no prose generation.
+- `dvdst cleanup` - removes a local store after marker and confirmation checks.
+
+### Evidence surface
+
+- Canonical file + JSONL store under `store/` with `records/`, `artifacts/`,
+  `events/`, and content-addressed `blobs/`.
+- Provenance on every normalized artifact and event: session id, entry id,
+  line, and byte range back into the raw snapshot.
+- Confidence vocabulary fixed to `observed`, `reconstructed`, `inferred`;
+  derived claims state their rule and their limit.
+- Deterministic and idempotent: re-running an extractor rewrites
+  byte-identical output and never touches the raw source snapshot.
+- No runtime dependencies, no model calls, no network.
+
+### Benchmarks and hardening
+
+- Ten-case benchmark against real Omakase sessions (docs/benchmark-report.md):
+  every case matches its devlog status, four use explicit `/skill:` commands,
+  and context reduction ranges from 82x to over 1100x.
+- Corpus run (docs/corpus-report.json): 396 sessions, 0 parse diagnostics,
+  ~6.6s, ~221 MB peak RSS, repeat run performs no writes.
+- Cookbook of tested jq recipes (docs/cookbook.md) for skill versions,
+  attributed tool use, validation, failures, and outcomes.
+
+### Breaking changes
+
+None - this is the first release.
+
+### Not in this release
+
+- MCP or HTTP server, Hermes profiles, SQLite canonical store, live background
+  watching, model-assisted semantic events, and non-Pi harnesses remain out of
+  scope per the project plan.

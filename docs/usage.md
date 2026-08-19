@@ -22,7 +22,7 @@ npm test
 You should see:
 
 - `npm run typecheck` exit with no errors.
-- `npm test` report 42 tests across 12 suites, all passing.
+- `npm test` report 52 tests across 15 suites, all passing.
 
 ## 3. Run the probe on a real session
 

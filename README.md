@@ -4,6 +4,8 @@
 
 The first adapter ingests Pi sessions from Omakase. It also accepts append-only live event streams from a running session. The first release exposes messages, tool activity, file activity, commands, tests, skill invocations, attributed skill spans, and provenance as JSONL.
 
+The release is deterministic and local: no runtime dependencies, no model calls, and no network. Re-running an extractor rewrites byte-identical output and never touches the retained raw source snapshot. See [`CHANGELOG.md`](CHANGELOG.md) for the full 0.1.0 surface and [`docs/release.md`](docs/release.md) for the hardening results, compatibility policy, and release checks.
+
 ## Quick start
 
 ```bash
