@@ -24,6 +24,7 @@ For concrete commands and real Omakase examples, read [`docs/usage.md`](docs/usa
 - [`docs/evidence-model.md`](docs/evidence-model.md) - the first storage and provenance design.
 - [`docs/live-streams.md`](docs/live-streams.md) - the live event contract and Pi extension adapter.
 - [`docs/session-ingestion.md`](docs/session-ingestion.md) - the session store: snapshots, change detection, and failure safety.
+- [`docs/events.md`](docs/events.md) - deterministic events, derived findings, and jq recipes.
 
 ## Product boundary
 

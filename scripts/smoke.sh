@@ -65,6 +65,15 @@ step "8. probe + inspection commands (baseline CP0)"
 npm run --silent dvdst -- files "$FIXTURE"
 npm run --silent dvdst -- trace "$FIXTURE" --id run-test | head -3
 
+step "9. deterministic events + findings from a stored session"
+npm run --silent dvdst -- events "$FIXTURE" --store "$STORE" \
+  | jq -e 'select(.status == "complete" and .counts.commandSucceeded == 1 and .findings.modifiedWithoutObservedRead == 1)' > /dev/null \
+  && echo "OK: one succeeded command, one modified-without-read finding"
+echo "-- findings --"
+jq -c 'select(.kind | startswith("finding")) | {kind, path, label}' "$SNAPSHOT/events/deterministic.jsonl"
+echo "-- command outcome events --"
+jq -c 'select(.kind == "command-succeeded") | {kind, command}' "$SNAPSHOT/events/deterministic.jsonl"
+
 step "done"
 if [[ "${DVDST_SMOKE_KEEP:-0}" == "1" ]]; then
   echo "store kept at: $STORE"

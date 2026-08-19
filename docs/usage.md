@@ -22,7 +22,7 @@ npm test
 You should see:
 
 - `npm run typecheck` exit with no errors.
-- `npm test` report 34 tests across 10 suites, all passing.
+- `npm test` report 42 tests across 12 suites, all passing.
 
 ## 3. Run the probe on a real session
 
@@ -185,6 +185,29 @@ npm run --silent dvdst -- files --store .dvdst/store --session <session-id> --fo
 npm run --silent dvdst -- commands --store .dvdst/store --session <session-id> --class typecheck
 ```
 
+Derive deterministic events and findings from the normalized artifacts:
+
+```bash
+npm run --silent dvdst -- events "$SESSION" --store .dvdst/store
+```
+
+The command ingests, normalizes, and extracts artifacts only if the snapshot
+lacks them, then writes `events/deterministic.jsonl` and `derived-events.json`
+into the snapshot. The stream contains `command-succeeded`, `command-failed`,
+`file-read`, and `file-mutation` events plus derived findings
+(`file-modified-without-observed-read`, `tests-not-run-after-final-mutation`,
+`unresolved-command-failure`). Query them from the store with jq:
+
+```bash
+LATEST=$(jq -r .sourceHash .dvdst/store/sessions/pi/<session-id>/latest.json)
+EV=".dvdst/store/sessions/pi/<session-id>/snapshots/$LATEST/events/deterministic.jsonl"
+jq -c 'select(.kind == "finding-unresolved-command-failure")' "$EV"
+jq -c 'select(.kind | startswith("finding")) | {kind, path, command}' "$EV"
+```
+
+See `docs/events.md` for the full event schema, the exact rules behind each
+finding, and jq recipes for all of them.
+
 ## 8. Run the benchmark
 
 The benchmark runs the probe and handoff against three real Omakase cases and writes a markdown report.
@@ -233,6 +256,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/sessions.ts` | discover Pi session files in a directory |
 | `src/normalize/normalize.ts` | normalize entries, messages, tools, and timeline into records |
 | `src/artifacts/extract.ts` | extract file, command, search, and test artifacts from records |
+| `src/events/extract.ts` | derive deterministic command, file, and finding records from artifacts |
 | `src/store/ingest-session.ts` | stream Pi session files into content-addressed snapshots |
 | `src/store/read-session.ts` | read a stored session snapshot and its manifest |
 | `src/store/ingest-live.ts` | snapshot one live event stream |
@@ -252,6 +276,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/cli/ingest.ts` | CLI to ingest session files or one live stream |
 | `src/cli/normalize.ts` | CLI to normalize a stored session |
 | `src/cli/artifacts.ts` | CLI to extract tool artifacts from a stored session |
+| `src/cli/events.ts` | CLI to derive deterministic events and findings from a stored session |
 | `src/cli/live.ts` | CLI to convert a live event stream to observed evidence |
 | `src/cli/export.ts` | CLI to export evidence as markdown or CSV |
 | `src/cli/timeline.ts` | CLI to read stored timeline evidence |

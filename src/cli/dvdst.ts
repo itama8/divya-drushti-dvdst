@@ -13,6 +13,7 @@ const commands: Record<string, string> = {
   ingest: "ingest.ts",
   normalize: "normalize.ts",
   artifacts: "artifacts.ts",
+  events: "events.ts",
   timeline: "timeline.ts",
   handoff: "handoff.ts",
   "handoff-devlog": "handoff-devlog.ts",
