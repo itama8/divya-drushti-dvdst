@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { isObject } from "../pi/read-jsonl.js";
 import { ingestLiveEvidence } from "../store/ingest-live.js";
 import { ingestSessionFile } from "../store/ingest-session.js";
+
+guardStdout();
 
 const DEFAULT_STORE = ".dvdst/store";
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+
+guardStdout();
 
 const commands: Record<string, string> = {
   probe: "probe.ts",

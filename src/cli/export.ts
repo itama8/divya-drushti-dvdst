@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { evidenceToCsv, evidenceToMarkdown, parseEvidenceJsonl } from "../export/render.js";
 import { readLiveSnapshot } from "../store/read-live.js";
+
+guardStdout();
 
 function usage(status = 2): never {
   console.error("Usage: dvdst export [--input <evidence.jsonl>] --format markdown|csv");

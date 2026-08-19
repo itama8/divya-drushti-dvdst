@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { handoffToText } from "../handoff/summary.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
+
+guardStdout();
 
 function usage(): never {
   console.error("Usage: dvdst probe --session <session.jsonl> [--devlog <devlog.md>] [--out <dir>] [--pretty]");

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { buildProbeBundle } from "../probe/build-bundle.js";
+
+guardStdout();
 
 function usage(): never {
   console.error("Usage: dvdst trace <session.jsonl> --id <recordId> [--format json|tsv|text]");

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { createReadStream } from "node:fs";
 import { parseArgs } from "node:util";
 import { LiveDecomposer, LiveEventError, parseLiveEvent } from "../live/decompose.js";
+
+guardStdout();
 
 function usage(status = 2): never {
   console.error("Usage: dvdst live [--input <events.jsonl>]");

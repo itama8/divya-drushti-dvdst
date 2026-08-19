@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { discoverSessions } from "../pi/sessions.js";
+
+guardStdout();
 
 function usage(): never {
   console.error("Usage: dvdst sessions <path...> [--format json|jsonl|tsv] [--limit N]");

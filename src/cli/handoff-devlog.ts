@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { devlogFromSummary } from "../devlog/format-devlog.js";
 import { buildHandoffSummary } from "../handoff/summary.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
+
+guardStdout();
 
 function usage(): never {
   console.error("Usage: dvdst handoff --session <session.jsonl> [--devlog <devlog.md>] [--out <devlog.md>] [--project omakase-v2] [--phase docs-spine] [--checkpoint name] [--focus one-line] [--date YYYY-MM-DD] [--session-num 2]");

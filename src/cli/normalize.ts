@@ -1,7 +1,10 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { normalizeSnapshot } from "../normalize/normalize.js";
 import { ingestSessionFile } from "../store/ingest-session.js";
+
+guardStdout();
 
 const DEFAULT_STORE = ".dvdst/store";
 

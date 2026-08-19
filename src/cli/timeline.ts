@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { readLiveSnapshot } from "../store/read-live.js";
+
+guardStdout();
 
 function usage(status = 2): never {
   console.error("Usage: dvdst timeline --store <directory> --source <source> --session <id> [--snapshot <sha256>] [--kind <event-kind>]");
