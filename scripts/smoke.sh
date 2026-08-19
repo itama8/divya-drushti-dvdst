@@ -82,6 +82,13 @@ npm run --silent dvdst -- skills --store "$STORE" --session fixture-session --vi
   | jq -e 'length >= 4' > /dev/null \
   && echo "OK: attributions include the skill-load and within-turn-window records"
 
+step "11. dispatcher arg handling for every subcommand"
+# probe, handoff, handoff-devlog, and sessions must strip the subcommand name
+npm run --silent dvdst -- handoff --session "$FIXTURE" --devlog test/fixtures/skill-devlog.md --format text \
+  | grep -q '^Status:' && echo "OK: handoff via dispatcher"
+npm run --silent dvdst -- sessions test/fixtures --format tsv \
+  | sed -n '1,2p' | grep -q '^path' && echo "OK: sessions via dispatcher"
+
 step "done"
 if [[ "${DVDST_SMOKE_KEEP:-0}" == "1" ]]; then
   echo "store kept at: $STORE"

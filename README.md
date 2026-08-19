@@ -26,6 +26,7 @@ For concrete commands and real Omakase examples, read [`docs/usage.md`](docs/usa
 - [`docs/session-ingestion.md`](docs/session-ingestion.md) - the session store: snapshots, change detection, and failure safety.
 - [`docs/events.md`](docs/events.md) - deterministic events, derived findings, and jq recipes.
 - [`docs/skills.md`](docs/skills.md) - skill invocation detection, attribution windows, and queries.
+- [`docs/cookbook.md`](docs/cookbook.md) - tested jq recipes for skill versions, attributed tool use, failures, and outcomes.
 
 ## Product boundary
 

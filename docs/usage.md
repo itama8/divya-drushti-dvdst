@@ -145,6 +145,10 @@ npm run dvdst -- trace "$SESSION" --id run-test
 
 All four inspection commands support `--format json` for structured pipelines.
 
+For the full set of tested jq recipes - skill version comparison, attributed
+tool use, failures, validation, and per-session outcomes - see
+[`docs/cookbook.md`](cookbook.md).
+
 ## 7. Ingest sessions into the evidence store
 
 Ingest preserves the raw Pi session file and a manifest in a content-addressed snapshot. A repeated unchanged ingestion performs no writes.

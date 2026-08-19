@@ -20,9 +20,14 @@ const { values } = parseArgs({
   allowPositionals: true,
 });
 
-if (values.help || !process.argv[2] || process.argv[2].startsWith("-")) usage();
+if (values.help) usage();
 
-const candidates = await discoverSessions(process.argv.slice(2));
+// Support the dispatcher (argv = [node, sessions.ts, sessions, <path...>]) and
+// a direct npm script (argv = [node, sessions.ts, <path...>]).
+const args = process.argv[2] === "sessions" ? process.argv.slice(3) : process.argv.slice(2);
+if (args.length === 0 || args[0]!.startsWith("-")) usage();
+
+const candidates = await discoverSessions(args);
 const limited = values.limit ? candidates.slice(0, Number.parseInt(values.limit, 10)) : candidates;
 if (values.format === "json") {
   process.stdout.write(`${JSON.stringify(limited, null, 2)}\n`);

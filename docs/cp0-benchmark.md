@@ -4,7 +4,7 @@
 
 Test whether deterministic extraction can produce useful Omakase handoff evidence with less context than a raw Pi session.
 
-This benchmark is incomplete. It contains the first of ten planned session cases.
+This benchmark now covers ten Omakase sessions with varied outcomes, including four sessions that used explicit `/skill:` commands and one planning session that produced no code changes.
 
 ## Case 1: recent documentation reconciliation
 
@@ -83,27 +83,34 @@ The probe writes the following to the output directory:
 
 The handoff command writes a short text or JSON summary derived from the same evidence.
 
-## Three-case benchmark
+## Ten-case benchmark
 
-The benchmark script reads `scripts/benchmark-cases.json`, runs each case through the probe and handoff, and writes `docs/benchmark-report.json` and `docs/benchmark-report.md`.
+The benchmark script reads `scripts/benchmark-cases.json`, runs each case through the probe and handoff, and writes `docs/benchmark-report.json` and `docs/benchmark-report.md`. The report now includes bundle and summary sizes, estimated tokens, and a context-reduction table.
 
 | id | status (obs/exp) | outcome | modified | cmds | failed | tests | commits matched | skills | source bytes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | docs-reconciliation | accepted / accepted | no-test-evidence | 16 | 13 | 0 | 0 | 1 | 5 | 687118 |
 | sushi-reference | closed / closed | unresolved-failure | 24 | 38 | 3 | 8 | 1 | 6 | 889578 |
 | move-website | accepted / stable | unresolved-failure | 7 | 20 | 1 | 0 | 0 | 1 | 197264 |
+| invocation-ux-ut | user-testing / user-testing | no-test-evidence | 20 | 42 | 0 | 0 | 1 | 1 | 948426 |
+| nested-scroll-acc | accepted / accepted | no-test-evidence | 5 | 21 | 0 | 0 | 1 | 2 | 377688 |
+| cursor-regression | closed / closed | unresolved-failure | 5 | 91 | 5 | 0 | 1 | 4 | 881870 |
+| frozen-invocation | closed / closed | unresolved-failure | 10 | 90 | 1 | 10 | 2 | 4 | 2866395 |
+| cp38-plan | planned / planned | no-test-evidence | 3 | 17 | 0 | 0 | 0 | 2 | 547854 |
+| glassy-background | closed / closed | unresolved-failure | 2 | 24 | 1 | 0 | 0 | 3 | 2623806 |
+| invocation-card-position | accepted / stable | no-test-evidence | 10 | 42 | 0 | 0 | 2 | 2 | 3509340 |
 
 Findings:
 
-- All three sessions match their devlog status after classifying `stable` as accepted.
-- The two closeout sessions that recorded 0 or 1 commit show the expected follow-up commit.
-- The move-website session has no commit in its devlog because the commit is intentionally after the devlog write.
+- All ten sessions match their devlog status after classifying `stable` as accepted.
+- Four sessions used explicit `/skill:` commands and appear in the skills column with their detected skill counts.
+- The cp38-plan case is a planning session: no commits and no contract matches are expected because the session produced a plan, not code. It exercises the `planned` status path.
+- A blocked session was not added because the blocked devlog (`2026-06-19-s04`) has no session in the local corpus that demonstrably wrote it; adding an unverified pair would weaken the benchmark. The planning case stands in for a session that ended without validated code.
+- Context reduction from source to the compact summary ranges from about 82× (planning session with a long written plan) to over 1100× for large implementation sessions.
 - The handoff devlog mapper renders valid frontmatter with derived confidence values.
 
 ## Next steps
 
-1. Add nine benchmark cases with varied outcomes and skill patterns.
-2. Include one explicit `/skill:name` invocation.
-3. Include one failed or blocked session.
-4. Measure estimated tokens in addition to bytes.
-5. Build a 10-session benchmark report comparing estimated tokens and matched fields.
+1. Add a verified blocked or regressed session once a reliable session/devlog pair exists in the corpus.
+2. Replace the byte/4 token estimate with a real tokenizer when one is added as a dependency.
+3. Evaluate commit matches against repository Git objects instead of transcript-extracted candidates only.

@@ -59,7 +59,12 @@
       ]
     },
     "sizes": {
-      "source": 687118
+      "sourceBytes": 687118,
+      "bundleBytes": 111533,
+      "summaryBytes": 1687,
+      "sourceEstimatedTokens": 171780,
+      "bundleEstimatedTokens": 27883,
+      "summaryEstimatedTokens": 422
     }
   },
   {
@@ -131,7 +136,12 @@
       ]
     },
     "sizes": {
-      "source": 889578
+      "sourceBytes": 889578,
+      "bundleBytes": 174147,
+      "summaryBytes": 2791,
+      "sourceEstimatedTokens": 222395,
+      "bundleEstimatedTokens": 43537,
+      "summaryEstimatedTokens": 698
     }
   },
   {
@@ -174,7 +184,416 @@
       "commitExtra": []
     },
     "sizes": {
-      "source": 197264
+      "sourceBytes": 197264,
+      "bundleBytes": 48400,
+      "summaryBytes": 1599,
+      "sourceEstimatedTokens": 49316,
+      "bundleEstimatedTokens": 12100,
+      "summaryEstimatedTokens": 400
+    }
+  },
+  {
+    "id": "invocation-ux-ut",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-28T11-08-54-992Z_019f0deb-0950-7685-b8de-5618314d9e45.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-06-28-s04.md",
+    "expected": {
+      "status": "user-testing",
+      "phase": "v2-migration",
+      "checkpoint": "sushi-note-body-grep-tool"
+    },
+    "observed": {
+      "status": "user-testing",
+      "outcome": "no-test-evidence",
+      "modified": [
+        ".devlog/2026-06-28-s04.md",
+        ".devlog/2026-06-28-s05.md",
+        ".devlog/2026-06-28-s06.md",
+        ".devlog/2026-06-28-s07.md",
+        "scripts/sushi-harness-test.mjs",
+        "src/main.ts",
+        "src/renderer.ts",
+        "src/sushi/context-package-policy.ts",
+        "src/sushi/context-package/api-executor.ts",
+        "src/sushi/context-package/bundled.ts",
+        "src/sushi/context-package/dynamic-context.ts",
+        "src/sushi/context-package/types.ts",
+        "src/sushi/harness-types.ts",
+        "src/sushi/harness/context-packet.ts",
+        "src/sushi/harness/model-package.ts",
+        "src/sushi/harness/policy.ts",
+        "src/sushi/model-callable-read-tools.ts",
+        "src/sushi/runner.ts",
+        "src/sushi/runtime.ts",
+        "src/ui/scroll-router.ts"
+      ],
+      "readCount": 31,
+      "commands": 42,
+      "failedCommands": 0,
+      "tests": 0,
+      "commitsMatched": [
+        "9cc1953"
+      ],
+      "commitsExpected": [
+        "9cc1953",
+        "9cc1953 feat(sushi): add note body grep tool"
+      ],
+      "skills": [
+        "slop-catcher"
+      ],
+      "explicitSkillCommands": 1,
+      "attributedRecords": 14
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [
+        "9cc1953 feat(sushi): add note body grep tool"
+      ],
+      "commitExtra": [
+        "9cc1953"
+      ]
+    },
+    "sizes": {
+      "sourceBytes": 948426,
+      "bundleBytes": 56326,
+      "summaryBytes": 4250,
+      "sourceEstimatedTokens": 237107,
+      "bundleEstimatedTokens": 14082,
+      "summaryEstimatedTokens": 1063
+    }
+  },
+  {
+    "id": "nested-scroll-acc",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-28T12-49-49-463Z_019f0e47-6b97-73ba-8734-20b74e3ef934.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-06-28-s08.md",
+    "expected": {
+      "status": "accepted",
+      "phase": "v2-migration",
+      "checkpoint": "native-nested-scroll-utility"
+    },
+    "observed": {
+      "status": "accepted",
+      "outcome": "no-test-evidence",
+      "modified": [
+        ".devlog/2026-06-28-s08.md",
+        "docs/editor-refactor-plan.md",
+        "src/renderer.ts",
+        "src/ui/nested-scroll.ts",
+        "src/ui/smooth-wheel.ts"
+      ],
+      "readCount": 9,
+      "commands": 21,
+      "failedCommands": 0,
+      "tests": 0,
+      "commitsMatched": [
+        "0c15cd7125e1fce5af9f5876b5f8ec93d4f53c2a"
+      ],
+      "commitsExpected": [
+        "0c15cd7125e1fce5af9f5876b5f8ec93d4f53c2a",
+        "0c15cd7125e1fce5af9f5876b5f8ec93d4f53c2a"
+      ],
+      "skills": [
+        "slop-catcher",
+        "slop-catcher"
+      ],
+      "explicitSkillCommands": 1,
+      "attributedRecords": 11
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": [
+        "0c15cd7125e1fce5af9f5876b5f8ec93d4f53c2a"
+      ]
+    },
+    "sizes": {
+      "sourceBytes": 377688,
+      "bundleBytes": 28986,
+      "summaryBytes": 1707,
+      "sourceEstimatedTokens": 94422,
+      "bundleEstimatedTokens": 7247,
+      "summaryEstimatedTokens": 427
+    }
+  },
+  {
+    "id": "cursor-regression",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-07-15T02-35-53-927Z_019f63a1-76c7-727b-8831-6f35799b1df7.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-07-15-s04.md",
+    "expected": {
+      "status": "closed",
+      "phase": "editor-cm6-stability",
+      "checkpoint": "Enter cursor edge-scroll regression fix"
+    },
+    "observed": {
+      "status": "closed",
+      "outcome": "unresolved-failure",
+      "modified": [
+        ".devlog/2026-07-15-s04.md",
+        ".devlog/2026-07-15-s05.md",
+        "dist/renderer.js",
+        "docs/plans/active/editor-card-primitive-plan.md",
+        "src/renderer.ts"
+      ],
+      "readCount": 16,
+      "commands": 91,
+      "failedCommands": 5,
+      "tests": 0,
+      "commitsMatched": [
+        "1c623593a97cac12ba37592cacddf0e260a47e15"
+      ],
+      "commitsExpected": [
+        "1c623593a97cac12ba37592cacddf0e260a47e15",
+        "1c623593a97cac12ba37592cacddf0e260a47e15"
+      ],
+      "skills": [
+        "slop-catcher",
+        "omakase-session-orient",
+        "omakase-session-handoff",
+        "omakase-checkpoint-closeout"
+      ],
+      "explicitSkillCommands": 1,
+      "attributedRecords": 270
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": [
+        "1c623593a97cac12ba37592cacddf0e260a47e15"
+      ]
+    },
+    "sizes": {
+      "sourceBytes": 881870,
+      "bundleBytes": 229105,
+      "summaryBytes": 1642,
+      "sourceEstimatedTokens": 220468,
+      "bundleEstimatedTokens": 57276,
+      "summaryEstimatedTokens": 411
+    }
+  },
+  {
+    "id": "frozen-invocation",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-07-16T20-54-20-983Z_019f6cb5-7c37-7758-b1ed-96fac4488b2d.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-07-17-s04.md",
+    "expected": {
+      "status": "closed",
+      "phase": "editor-card-stability",
+      "checkpoint": "frozen-invocation-generation-cp2s"
+    },
+    "observed": {
+      "status": "closed",
+      "outcome": "unresolved-failure",
+      "modified": [
+        ".devlog/2026-07-17-s04.md",
+        "docs/plans/active/editor-card-primitive-plan.md",
+        "docs/plans/checkpoint-map.md",
+        "package.json",
+        "scripts/invocation-frozen-generation-smoke.mjs",
+        "scripts/invocation-render-stabilizer-smoke.mjs",
+        "src/editor/invocation-render-stabilizer.ts",
+        "src/editor/invocation-response-buffer.ts",
+        "src/renderer.ts",
+        "src/styles.css"
+      ],
+      "readCount": 15,
+      "commands": 90,
+      "failedCommands": 1,
+      "tests": 10,
+      "commitsMatched": [
+        "6c6cc2423adb1bdc46a20047ad535d09bd6cfd3c",
+        "5d798797d109e165a5b69811ca309078b056bd18"
+      ],
+      "commitsExpected": [
+        "6c6cc2423adb1bdc46a20047ad535d09bd6cfd3c",
+        "5d798797d109e165a5b69811ca309078b056bd18",
+        "6c6cc2423adb1bdc46a20047ad535d09bd6cfd3c"
+      ],
+      "skills": [
+        "slop-catcher",
+        "omakase-session-orient",
+        "omakase-checkpoint-map",
+        "omakase-checkpoint-closeout"
+      ],
+      "explicitSkillCommands": 1,
+      "attributedRecords": 361
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": [
+        "6c6cc2423adb1bdc46a20047ad535d09bd6cfd3c",
+        "5d798797d109e165a5b69811ca309078b056bd18"
+      ]
+    },
+    "sizes": {
+      "sourceBytes": 2866395,
+      "bundleBytes": 198278,
+      "summaryBytes": 2663,
+      "sourceEstimatedTokens": 716599,
+      "bundleEstimatedTokens": 49570,
+      "summaryEstimatedTokens": 666
+    }
+  },
+  {
+    "id": "cp38-plan",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-15T02-41-19-542Z_019ec927-a6b6-7f47-9492-fc7c9af4e52b.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-06-15-s06.md",
+    "expected": {
+      "status": "planned",
+      "phase": "v2-migration",
+      "checkpoint": "CP38-in-memory-invocation-ui-plan"
+    },
+    "observed": {
+      "status": "planned",
+      "outcome": "no-test-evidence",
+      "modified": [
+        ".devlog/2026-06-15-s06.md",
+        "docs/sushi-ephemeral-invocation-ux.md",
+        "docs/visual-language.md"
+      ],
+      "readCount": 10,
+      "commands": 17,
+      "failedCommands": 0,
+      "tests": 0,
+      "commitsMatched": [],
+      "commitsExpected": [
+        "722ae81",
+        "722ae81 docs(sushi): plan in-memory invocation UI state",
+        "e10830e docs(sushi): refine invocation overlay card plan"
+      ],
+      "skills": [
+        "tavily-search",
+        "tavily-extract"
+      ],
+      "explicitSkillCommands": 0,
+      "attributedRecords": 18
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [
+        "722ae81",
+        "722ae81 docs(sushi): plan in-memory invocation UI state",
+        "e10830e docs(sushi): refine invocation overlay card plan"
+      ],
+      "commitExtra": []
+    },
+    "sizes": {
+      "sourceBytes": 547854,
+      "bundleBytes": 35623,
+      "summaryBytes": 6655,
+      "sourceEstimatedTokens": 136964,
+      "bundleEstimatedTokens": 8906,
+      "summaryEstimatedTokens": 1664
+    }
+  },
+  {
+    "id": "glassy-background",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-20T17-34-08-308Z_019ee618-d7b4-7801-8559-4f74362888ce.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-06-20-s09.md",
+    "expected": {
+      "status": "closed",
+      "phase": "v2-migration",
+      "checkpoint": "CP-UI-glassy-editor-background-check"
+    },
+    "observed": {
+      "status": "closed",
+      "outcome": "unresolved-failure",
+      "modified": [
+        ".devlog/2026-06-20-s09.md",
+        "src/styles.css"
+      ],
+      "readCount": 23,
+      "commands": 24,
+      "failedCommands": 1,
+      "tests": 0,
+      "commitsMatched": [],
+      "commitsExpected": [],
+      "skills": [
+        "frontend-design",
+        "session-search",
+        "omarchy"
+      ],
+      "explicitSkillCommands": 0,
+      "attributedRecords": 146
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": []
+    },
+    "sizes": {
+      "sourceBytes": 2623806,
+      "bundleBytes": 89569,
+      "summaryBytes": 2339,
+      "sourceEstimatedTokens": 655952,
+      "bundleEstimatedTokens": 22392,
+      "summaryEstimatedTokens": 585
+    }
+  },
+  {
+    "id": "invocation-card-position",
+    "session": "../../.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-15T12-08-39-870Z_019ecb2f-10be-714a-b07e-4d106f790375.jsonl",
+    "devlog": "../omakase-v2/.devlog/2026-06-15-s10.md",
+    "expected": {
+      "status": "stable",
+      "phase": "v2-migration",
+      "checkpoint": "CP42-invocation-card-position-and-expand"
+    },
+    "observed": {
+      "status": "accepted",
+      "outcome": "no-test-evidence",
+      "modified": [
+        ".devlog/2026-06-15-s10.md",
+        ".devlog/2026-06-15-s11.md",
+        ".devlog/invocation-cube-shape-concepts-v2.html",
+        ".devlog/invocation-cube-shape-concepts.html",
+        "docs/visual-language.md",
+        "iteration-playground/invocation-cube-shape-concepts.html",
+        "iteration-playground/invocation-cube-shape-iteration-02.html",
+        "iteration-playground/omakase-glyph-transformations.html",
+        "src/renderer.ts",
+        "src/styles.css"
+      ],
+      "readCount": 20,
+      "commands": 42,
+      "failedCommands": 0,
+      "tests": 0,
+      "commitsMatched": [
+        "4e959de",
+        "5c7c234"
+      ],
+      "commitsExpected": [
+        "4e959de",
+        "4e959de",
+        "5c7c234"
+      ],
+      "skills": [
+        "tavily-search",
+        "frontend-design"
+      ],
+      "explicitSkillCommands": 0,
+      "attributedRecords": 9
+    },
+    "evaluation": {
+      "statusMatch": true,
+      "commitMatch": 0,
+      "commitMissed": [],
+      "commitExtra": [
+        "4e959de",
+        "5c7c234"
+      ]
+    },
+    "sizes": {
+      "sourceBytes": 3509340,
+      "bundleBytes": 58289,
+      "summaryBytes": 4609,
+      "sourceEstimatedTokens": 877335,
+      "bundleEstimatedTokens": 14572,
+      "summaryEstimatedTokens": 1152
     }
   }
 ]

@@ -13,7 +13,9 @@ function usage(): never {
   process.exit(2);
 }
 
+const stripped = process.argv[2] === "handoff-devlog" ? process.argv.slice(3) : process.argv.slice(2);
 const { values } = parseArgs({
+  args: stripped,
   options: {
     session: { type: "string", short: "s" },
     devlog: { type: "string", short: "d" },

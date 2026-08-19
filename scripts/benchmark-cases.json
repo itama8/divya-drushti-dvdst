@@ -29,6 +29,76 @@
         "phase": "website-experience",
         "checkpoint": "WEB-repo-split"
       }
+    },
+    {
+      "id": "invocation-ux-ut",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-28T11-08-54-992Z_019f0deb-0950-7685-b8de-5618314d9e45.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-06-28-s04.md",
+      "expected": {
+        "status": "user-testing",
+        "phase": "v2-migration",
+        "checkpoint": "sushi-note-body-grep-tool"
+      }
+    },
+    {
+      "id": "nested-scroll-acc",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-28T12-49-49-463Z_019f0e47-6b97-73ba-8734-20b74e3ef934.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-06-28-s08.md",
+      "expected": {
+        "status": "accepted",
+        "phase": "v2-migration",
+        "checkpoint": "native-nested-scroll-utility"
+      }
+    },
+    {
+      "id": "cursor-regression",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-07-15T02-35-53-927Z_019f63a1-76c7-727b-8831-6f35799b1df7.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-07-15-s04.md",
+      "expected": {
+        "status": "closed",
+        "phase": "editor-cm6-stability",
+        "checkpoint": "Enter cursor edge-scroll regression fix"
+      }
+    },
+    {
+      "id": "frozen-invocation",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-07-16T20-54-20-983Z_019f6cb5-7c37-7758-b1ed-96fac4488b2d.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-07-17-s04.md",
+      "expected": {
+        "status": "closed",
+        "phase": "editor-card-stability",
+        "checkpoint": "frozen-invocation-generation-cp2s"
+      }
+    },
+    {
+      "id": "cp38-plan",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-15T02-41-19-542Z_019ec927-a6b6-7f47-9492-fc7c9af4e52b.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-06-15-s06.md",
+      "expected": {
+        "status": "planned",
+        "phase": "v2-migration",
+        "checkpoint": "CP38-in-memory-invocation-ui-plan"
+      }
+    },
+    {
+      "id": "glassy-background",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-20T17-34-08-308Z_019ee618-d7b4-7801-8559-4f74362888ce.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-06-20-s09.md",
+      "expected": {
+        "status": "closed",
+        "phase": "v2-migration",
+        "checkpoint": "CP-UI-glassy-editor-background-check"
+      }
+    },
+    {
+      "id": "invocation-card-position",
+      "session": "/home/a2ajinkya/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/2026-06-15T12-08-39-870Z_019ecb2f-10be-714a-b07e-4d106f790375.jsonl",
+      "devlog": "/home/a2ajinkya/Projects/omakase-v2/.devlog/2026-06-15-s10.md",
+      "expected": {
+        "status": "stable",
+        "phase": "v2-migration",
+        "checkpoint": "CP42-invocation-card-position-and-expand"
+      }
     }
   ]
 }
