@@ -224,7 +224,7 @@ finding, and jq recipes for all of them.
 
 ## 8. Run the benchmark
 
-The benchmark runs the probe and handoff against three real Omakase cases and writes a markdown report.
+The benchmark runs the probe and handoff against ten real Omakase cases and writes a markdown report.
 
 ```bash
 node --import tsx scripts/run-benchmark.mjs
@@ -247,6 +247,31 @@ To add a new case, append it to `scripts/benchmark-cases.json`:
 ```
 
 Then re-run the benchmark. The status field uses the same values the devlog frontmatter uses: `accepted`, `closed`, `stable`, `user-testing`, `blocked`, `regressed`, or `planned`.
+
+## 8b. Ingest the whole corpus
+
+Run read-only ingestion against every session under a Pi session root:
+
+```bash
+npm run corpus -- ~/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2-- \
+  --store .dvdst/store-corpus --report docs/corpus-report.json
+```
+
+The runner discovers sessions, ingests each into the store, classifies parse
+diagnostics, verifies a sampled set of source files is unchanged, and writes an
+aggregate report. A repeat run should report every session `unchanged`; do it on
+quiesced sessions so a live, still-appending file is not misread. See
+[`docs/release.md`](release.md) for the measured corpus run and the release
+checks.
+
+Remove the local store without touching the Pi sessions themselves:
+
+```bash
+npm run dvdst -- cleanup --store .dvdst/store --yes
+```
+
+Cleanup refuses to delete a directory without a `store.json` marker or without
+`--yes`.
 
 ## 9. Run a one-off smoke test
 
@@ -288,6 +313,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/cli/sessions.ts` | CLI to list Pi session files |
 | `src/cli/records.ts` | CLI for files, commands, and skills streams |
 | `src/cli/trace.ts` | CLI to look up the provenance of a single record |
+| `src/cli/cleanup.ts` | CLI to remove a local evidence store after marker and confirmation checks |
 | `src/cli/ingest.ts` | CLI to ingest session files or one live stream |
 | `src/cli/normalize.ts` | CLI to normalize a stored session |
 | `src/cli/artifacts.ts` | CLI to extract tool artifacts from a stored session |
@@ -298,6 +324,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/cli/dvdst.ts` | dispatcher that routes every subcommand |
 | `examples/pi-extension/dvdst-live.ts` | observe-only Pi extension that writes live events |
 | `scripts/run-benchmark.mjs` | run all benchmark cases and write the report |
+| `scripts/corpus-ingest.mjs` | read-only corpus ingestion, diagnostic classification, and resource measurement |
 | `scripts/benchmark-cases.json` | list of real Omakase sessions used by the benchmark |
 | `docs/benchmark-report.md` | latest benchmark output |
 | `docs/cp0-benchmark.md` | narrative summary of the CP0 product proof |

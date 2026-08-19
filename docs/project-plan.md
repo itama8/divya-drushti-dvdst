@@ -114,6 +114,8 @@ The inspection commands should read the store. They should emit JSONL by default
 
 ### CP0: Product proof and fixture baseline
 
+**Status: complete** - ten-case benchmark in `docs/benchmark-report.md`; all cases match their devlog status, four use explicit `/skill:` commands.
+
 #### Goal
 
 Prove that compact session evidence helps with Omakase handoffs before freezing a broad evidence schema.
@@ -150,6 +152,8 @@ If the bundle does not help, narrow the product to the useful extracted facts. D
 
 ### CP1: Discovery and source ingestion
 
+**Status: complete** - `dvdst ingest` snapshots raw sessions with change classes; `scripts/corpus-ingest.mjs` ingests the whole corpus read-only.
+
 #### Goal
 
 Discover Pi sessions and preserve a validated raw snapshot in the evidence store.
@@ -174,6 +178,8 @@ Discover Pi sessions and preserve a validated raw snapshot in the evidence store
 - changed earlier lines force safe re-ingestion
 
 ### CP2: Message, tree, and tool normalization
+
+**Status: complete** - `dvdst normalize` covers every entry type found in the corpus; schema-variant fixtures in `test/schema-variants.test.ts` lock the behavior.
 
 #### Goal
 
@@ -200,6 +206,8 @@ Expose clean conversation records and a complete execution timeline.
 
 ### CP3: Tool-specific evidence
 
+**Status: complete** - `dvdst artifacts` extracts file, command, search, and test artifacts with observed/reconstructed honesty.
+
 #### Goal
 
 Turn Pi tool records into useful file, search, command, and test artifacts.
@@ -224,6 +232,8 @@ Turn Pi tool records into useful file, search, command, and test artifacts.
 - mutation records state whether a patch is observed, reconstructed, or inferred
 
 ### CP4: Skill invocation and attribution
+
+**Status: complete** - `dvdst skills` reads store streams `records/skill-invocations.jsonl` and `records/skill-attributions.jsonl`; detection and boundary rules in `docs/skills.md`.
 
 #### Goal
 
@@ -253,6 +263,8 @@ Separate skill use from the general transcript and label the records that each s
 
 ### CP5: Deterministic events and cookbook proof
 
+**Status: complete** - `dvdst events` emits command/file events and three findings; tested jq recipes in `docs/cookbook.md` and `test/cookbook.test.ts`.
+
 #### Goal
 
 Prove that structured evidence can reduce Omakase maintenance work without a model.
@@ -278,6 +290,8 @@ Prove that structured evidence can reduce Omakase maintenance work without a mod
 - a handoff consumer can start from a compact bundle instead of raw transcripts
 
 ### CP6: Corpus hardening and release
+
+**Status: complete** - measured corpus run in `docs/release.md` and `docs/corpus-report.json`; compatibility policy and release checks defined; README shows a complete evidence workflow.
 
 #### Goal
 

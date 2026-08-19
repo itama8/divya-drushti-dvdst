@@ -21,9 +21,11 @@
     "handoff-devlog": "tsx src/cli/handoff-devlog.ts",
     "sessions": "tsx src/cli/sessions.ts",
     "records": "tsx src/cli/records.ts",
+    "cleanup": "tsx src/cli/cleanup.ts",
     "dvdst": "tsx src/cli/dvdst.ts",
     "test": "tsx --test test/**/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "corpus": "node --import tsx scripts/corpus-ingest.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

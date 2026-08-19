@@ -22,6 +22,7 @@ const commands: Record<string, string> = {
   commands: "records.ts",
   skills: "records.ts",
   trace: "trace.ts",
+  cleanup: "cleanup.ts",
 };
 
 const arg = process.argv[2];
