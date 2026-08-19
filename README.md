@@ -2,60 +2,158 @@
 
 `dvdst` turns coding-agent sessions into structured development evidence.
 
-The first adapter ingests Pi sessions from Omakase. It also accepts append-only live event streams from a running session. The first release exposes messages, tool activity, file activity, commands, tests, skill invocations, attributed skill spans, and provenance as JSONL.
+A coding session is a long JSONL transcript. To answer "which files changed,
+which commands failed, which skills ran", you first read the whole session
+back into context. dvdst ingests the session once. After that, you and
+other agents query narrow, verifiable facts without rereading it.
 
-The release is deterministic and local: no runtime dependencies, no model calls, and no network. Re-running an extractor rewrites byte-identical output and never touches the retained raw source snapshot. See [`CHANGELOG.md`](CHANGELOG.md) for the full 0.1.0 surface and [`docs/release.md`](docs/release.md) for the hardening results, compatibility policy, and release checks.
+## What dvdst does
 
-## Quick start
+dvdst copies a Pi session into a local evidence store, then derives streams
+from it:
+
+- messages, tool calls, and tool results, each with line-level provenance
+- file reads and mutations, with observed versus reconstructed patches
+- shell commands and their outcomes, classified by command type
+- skill invocations and the records a skill may have influenced
+- deterministic events: command success, command failure, file activity
+- findings: a file changed without a prior read, final changes never re-run
+  through tests, command failures never retried to success
+- a compact handoff summary for closeout, without generating prose
+
+The pipeline is one command:
+
+```text
+ingest -> normalize -> artifacts -> skills -> events -> handoff
+```
+
+Every step is deterministic, local, and dependency-free. It makes no model
+calls and no network requests. Re-running an extractor writes byte-identical
+output and never changes the raw snapshot it copied.
+
+## Install and try it
 
 ```bash
-cd ~/Projects/dvdst
 npm install
 npm test
 ```
 
-For concrete commands and real Omakase examples, read [`docs/usage.md`](docs/usage.md).
-
-## Project documents
-
-- [`docs/usage.md`](docs/usage.md) - how to run the probe, handoff, devlog mapper, and benchmark.
-- [`docs/cp0-benchmark.md`](docs/cp0-benchmark.md) - product-proof results and ten-case benchmark.
-- [`docs/benchmark-report.md`](docs/benchmark-report.md) - latest benchmark output as a table.
-- [`docs/project-plan.md`](docs/project-plan.md) - scope, checkpoints, and completion criteria.
-- [`docs/pi-session-source.md`](docs/pi-session-source.md) - findings from the Pi source format and the Omakase session corpus.
-- [`docs/evidence-model.md`](docs/evidence-model.md) - the first storage and provenance design.
-- [`docs/live-streams.md`](docs/live-streams.md) - the live event contract and Pi extension adapter.
-- [`docs/session-ingestion.md`](docs/session-ingestion.md) - the session store: snapshots, change detection, and failure safety.
-- [`docs/events.md`](docs/events.md) - deterministic events, derived findings, and jq recipes.
-- [`docs/skills.md`](docs/skills.md) - skill invocation detection, attribution windows, and queries.
-- [`docs/cookbook.md`](docs/cookbook.md) - tested jq recipes for skill versions, attributed tool use, failures, and outcomes.
-- [`docs/release.md`](docs/release.md) - corpus hardening results, compatibility policy, and release checks.
-
-## Product boundary
-
-Adapters produce evidence. Extractors produce events. CLI tools expose both. Profiles and recipes consume them.
-
-The canonical evidence store uses files and JSONL. An index can improve queries later, but it does not replace canonical files.
-
-## Complete Omakase evidence workflow
-
-One pass from a raw Pi session to a queryable store, with failure findings and
-skill-attributed records:
+Node 22 or newer. The examples in this readme use the Omakase session corpus,
+but the commands work on any Pi session file.
 
 ```bash
-SESSION="$HOME/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2--/<session-id>.jsonl"
-npm run --silent dvdst -- events "$SESSION" --store .dvdst/store   # ingest + normalize + artifacts + events
-npm run --silent dvdst -- skills --store .dvdst/store --session <session-id> --view invocations
-npm run --silent dvdst -- skills --store .dvdst/store --session <session-id> --view attributions
-LATEST=$(jq -r .sourceHash ".dvdst/store/sessions/pi/<session-id>/latest.json")
-BASE=".dvdst/store/sessions/pi/<session-id>/snapshots/$LATEST"
-# unresolved command failures and files changed without a prior read
-jq -c 'select(.kind | startswith("finding"))' "$BASE/events/deterministic.jsonl"
-# every command that ran inside a skill span, joined by tool-call id
-jq -n --slurpfile a "$BASE/records/skill-attributions.jsonl" --slurpfile c "$BASE/artifacts/commands.jsonl" \
-  '($a[] | select(.recordKind == "tool-call")) as $at | ($c[] | select(.toolCallId == $at.recordId)) as $cmd | {command: $cmd.command, failed: $cmd.result.isError}'
+npm run --silent dvdst -- events /path/to/session.jsonl --store .dvdst/store
 ```
 
-For the full store layout, jq recipes, and what each finding means, read
-[`docs/events.md`](docs/events.md), [`docs/skills.md`](docs/skills.md), and
-[`docs/cookbook.md`](docs/cookbook.md).
+This one command ingests, normalizes, extracts artifacts, and derives events.
+To read store-generated streams later, use the store forms of the commands,
+which accept `--store` and `--session` (see `docs/usage.md`).
+
+## Use dvdst as a human
+
+### Investigate one session
+
+These examples use `$SESSION` as the path to a session file.
+
+```bash
+npm run dvdst -- files    "$SESSION"                     # what was read and mutated
+npm run dvdst -- commands "$SESSION" --class test        # test commands only
+npm run dvdst -- skills   "$SESSION"                     # skill invocations and span lines
+npm run dvdst -- trace    "$SESSION" --id <record-id>    # provenance of one record
+```
+
+### Close out a session
+
+```bash
+npm run dvdst -- handoff "$SESSION" --devlog .devlog/2026-08-04.md
+npm run dvdst -- handoff-devlog "$SESSION" --out draft.md --project omakase-v2
+```
+
+The handoff summary reports goals, touched files, commands, tests, skills,
+commits, and unresolved work. A summary of a 687 KB session is about 1.6 KB,
+with source-line references for every claim. A maintainer verifies claims
+without rereading the transcript.
+
+### Run the benchmark or ingest the corpus
+
+```bash
+node --import tsx scripts/run-benchmark.mjs
+npm run corpus -- ~/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2-- \
+  --store .dvdst/store-corpus
+npm run dvdst -- cleanup --store .dvdst/store --yes
+```
+
+The benchmark runs ten real Omakase sessions and writes the report. The corpus
+command ingests every session under a root, read-only. Cleanup removes the
+local store. It never touches the Pi sessions.
+
+## Use dvdst as an agent
+
+### Read canonical files directly
+
+The store is plain JSONL on disk. You do not need the CLI to read it. This is
+the contract:
+
+```text
+store/sessions/pi/<session-id>/snapshots/<source-hash>/
+├── source/raw.jsonl               verbatim snapshot the streams point back to
+├── records/                       entries, messages, tool calls, timeline,
+│                                  skill invocations and attributions
+├── artifacts/                     file reads, mutations, commands, tests
+└── events/deterministic.jsonl     events and findings, in source order
+```
+
+Each record carries a `confidence` value (`observed`, `reconstructed`,
+`inferred`) and a `source` reference to a line and byte range in the raw
+snapshot. No record pretends an absence is a fact, and no record pretends
+reconstruction is observation.
+
+### Pipe JSONL through stdout
+
+Commands write one JSON object per line on stdout and diagnostics on stderr.
+This makes discovery and ingestion composable:
+
+```bash
+npm run --silent dvdst -- sessions <root> --format jsonl \
+  | npm run --silent dvdst -- ingest --store .dvdst/store
+```
+
+### Join streams with jq
+
+Attributions and commands share a tool-call id. This join reports every
+command that ran inside a skill span:
+
+```bash
+jq -n --slurpfile a "$BASE/records/skill-attributions.jsonl" \
+      --slurpfile c "$BASE/artifacts/commands.jsonl" \
+ '($a[] | select(.recordKind=="tool-call")) as $at
+  | ($c[] | select(.toolCallId==$at.recordId)) as $cmd
+  | {command: $cmd.command, failed: $cmd.result.isError, skills: [$at.labels[].invocationId]}'
+```
+
+The jq cookbook in `docs/cookbook.md` covers skill versions by content hash,
+attributed tool use, validation, failures, and per-session outcomes. Each
+recipe's output is asserted by a test, so the recipes do not drift from the
+extractors.
+
+## Status
+
+Release `0.1.0`. The ten-case benchmark matches every devlog status, and the
+compact summary reduces source to about 1/100 to 1/1000 of its size. Corpus
+ingestion covers 396 Omakase sessions with zero parse diagnostics.
+
+Read the full release notes in `CHANGELOG.md` and the hardening details,
+compatibility policy, and release checks in `docs/release.md`.
+
+## Documentation
+
+- `docs/usage.md` - command reference with real Omakase paths.
+- `docs/events.md` - event and finding schema, and per-finding jq recipes.
+- `docs/skills.md` - skill detection, attribution windows, and queries.
+- `docs/cookbook.md` - tested jq recipes for evidence joins.
+- `docs/session-ingestion.md` - the store, change detection, and failure safety.
+- `docs/evidence-model.md` - the storage and provenance model.
+- `docs/live-streams.md` - the live event contract and Pi extension adapter.
+- `docs/cp0-benchmark.md` and `docs/benchmark-report.md` - product proof results.
+- `docs/project-plan.md` - scope, checkpoints, and completion criteria.
+- `docs/release.md` - corpus hardening, compatibility, and release checks.
