@@ -123,6 +123,72 @@ Process the stream during or after the session:
 npm run dvdst -- live --input .dvdst/live/<session-id>.jsonl
 ```
 
+## Stage a session's changes
+
+`dvdst stage` reads one append-only stream or Pi session file. It replays
+successful exact edits from HEAD, then compares complete replay states with
+the index. All edits in one tool call match the same original content.
+Unrelated dirty worktree hunks stay unstaged. The command does not change the
+worktree or commit.
+
+```bash
+npm run --silent dvdst -- stage \
+  --input .dvdst/live/<session-id>.jsonl \
+  --cwd /path/to/repository
+
+npm run --silent dvdst -- stage \
+  --session-file ~/.pi/agent/sessions/<project>/<session>.jsonl \
+  --cwd /path/to/repository
+```
+
+The command prints one JSON record with `staged`, `unchanged`, `conflicts`, and
+`excluded` arrays. Exit code 1 means a conflict blocked the entire operation.
+Exit code 2 means input, Git, or execution failed. Neither failure publishes a
+partially prepared index. A repeated run compares the full result with the
+index and reports matching paths as `unchanged`, including chained edits and
+deletions. An earlier complete replay state can advance to a later state.
+
+`--cwd` selects the repository. Relative mutation paths resolve from the
+recorded session directory, not the selected repository. Paths outside that
+repository appear in `excluded` and are skipped. Run the command separately
+for each repository edited by the session. `--session <id>` verifies the
+source identity. It does not relabel or filter a mixed-session source.
+
+Unrelated staged changes block the operation, even on another path. The
+command does not clear them. Inspect the index and preserve their ownership
+before retrying. A successful run prepares a private index under Git's normal
+index lock, then publishes it with one rename. `--dry-run` performs the same
+checks without publishing. It also requires the index lock.
+
+Successful bash commands that look file-mutating are listed in
+`unattributedBash` with the signals that matched, such as `heredoc`, `redirect`,
+or `git apply or patch`. They are warnings, not path attributions, and they are
+never staged. Check the list before committing.
+
+Limits:
+
+- Writes are allowed only for paths absent from HEAD. The entire recorded
+  payload becomes the staged file. This does not prove who first created an
+  untracked file. Writes to tracked files conflict because no pre-image proves
+  ownership. Use exact edits instead.
+- Missing, duplicate, or overlapping anchors conflict. Fuzzy edits are not
+  reconstructed. An edit to an untracked file requires an earlier recorded
+  write in this session.
+- Mixed-session live streams, duplicate events, malformed session JSON, and
+  invalid successful mutation evidence fail instead of being silently dropped.
+- Forked session files contain inherited tool calls and are refused. A live
+  stream recorded for the new session can still be used.
+- Unmerged entries, symlinks, submodules, binary blobs, and invalid UTF-8 content
+  are not supported. These paths conflict instead of being rewritten.
+- Start a new session after committing. Replaying old mutations against a
+  changed HEAD is not supported. No persistent staging receipt exists.
+- Bash changes are not attributed. The warning detector can miss helper-script
+  writes. Recorded tool results do not prove that their changes still exist in
+  the worktree. Inspect the complete staged diff before committing.
+- A normal cancellation releases the lock before publication. A killed process
+  can leave `index.lock`, as Git can. Inspect the repository and confirm no
+  writer remains before removing a stale lock.
+
 ## Context and cache rule
 
 The evidence stream is not a replacement for the model context. It is a durable external record. A later context builder may select evidence and create a compact continuation prompt.

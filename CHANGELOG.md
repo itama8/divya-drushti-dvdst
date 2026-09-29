@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `dvdst stage` stages exact session edits and writes to paths absent from HEAD
+  from a live stream or Pi session file. Complete HEAD replay states make
+  repeated staging safe for chained edits and deletions. One conflicting path
+  or unrelated staged change blocks publication. The command prepares a private
+  index under Git's lock and publishes it once. Repository selection preserves
+  recorded relative paths. Bash mutation warnings remain heuristic.
+- Staging rejects tracked-file writes without pre-images, mixed-session streams,
+  inherited fork-file mutations, malformed evidence, and unsupported Git entries.
+  Start a new session after committing.
+
 ## 0.1.0 - first release
 
 `dvdst` turns Pi coding-agent sessions into structured, deterministic

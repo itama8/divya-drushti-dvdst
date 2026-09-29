@@ -25,7 +25,8 @@
     "dvdst": "tsx src/cli/dvdst.ts",
     "test": "tsx --test test/**/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "corpus": "node --import tsx scripts/corpus-ingest.mjs"
+    "corpus": "node --import tsx scripts/corpus-ingest.mjs",
+    "stage": "tsx src/cli/stage.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

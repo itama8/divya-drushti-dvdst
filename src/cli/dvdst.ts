@@ -9,6 +9,7 @@ guardStdout();
 const commands: Record<string, string> = {
   probe: "probe.ts",
   live: "live.ts",
+  stage: "stage.ts",
   export: "export.ts",
   ingest: "ingest.ts",
   normalize: "normalize.ts",

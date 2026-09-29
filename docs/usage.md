@@ -22,7 +22,7 @@ npm test
 You should see:
 
 - `npm run typecheck` exit with no errors.
-- `npm test` report 52 tests across 15 suites, all passing.
+- `npm test` report all discovered tests passing.
 
 ## 3. Run the probe on a real session
 
@@ -148,6 +148,34 @@ All four inspection commands support `--format json` for structured pipelines.
 For the full set of tested jq recipes - skill version comparison, attributed
 tool use, failures, validation, and per-session outcomes - see
 [`docs/cookbook.md`](cookbook.md).
+
+## 6b. Stage one session's changes
+
+When a worktree carries several writers, stage only the changes one session
+made. The command reads that session's live stream, or its Pi session file,
+and replays its exact edits from HEAD. Unrelated dirty worktree hunks stay
+unstaged. Unrelated staged changes block the whole operation. Writes are
+allowed only for paths absent from HEAD.
+
+```bash
+npm run --silent dvdst -- stage \
+  --input .dvdst/live/<session-id>.jsonl \
+  --cwd /path/to/repository
+
+npm run --silent dvdst -- stage \
+  --session-file ~/.pi/agent/sessions/<project>/<session>.jsonl \
+  --cwd /path/to/repository
+```
+
+Add `--dry-run` to check the plan without publishing index changes. Use
+`--session <id>` to verify the source identity. `--cwd` selects a repository,
+but relative mutation paths retain the recorded session directory. Other
+repositories' paths are reported as excluded. Stage each repository separately.
+
+The report includes `unattributedBash`, a heuristic warning list of successful
+bash commands that look file-mutating. Inspect those warnings and the complete
+staged diff before committing. Start a new session after committing. See
+[`docs/live-streams.md`](live-streams.md) for transaction behavior and limits.
 
 ## 7. Ingest sessions into the evidence store
 
