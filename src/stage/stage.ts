@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { LiveDecomposer, LiveEventError, parseLiveEvent, type LiveEvent } from "../live/decompose.js";
 
-const LIMIT = "Exact successful edits are replayed from HEAD. Writes are allowed only for paths absent from HEAD. Unrelated staged changes, ambiguous anchors, and conflicts block the entire operation. Bash warnings are heuristic, not attribution. After committing, start a new session for further edits.";
+const LIMIT = "Exact successful edits from one session or an explicit HEAD-pinned manifest are replayed from HEAD. Writes are allowed only for paths absent from HEAD. Unrelated staged changes, ambiguous anchors, and conflicts block the entire operation. Bash warnings are heuristic, not attribution. After committing, start a new session for further edits.";
 
 const MAX_BASH_WARNINGS = 20;
 const MAX_COMMAND_PREVIEW = 160;
@@ -46,7 +46,8 @@ export interface StageReport {
   schemaVersion: 1;
   kind: "stage";
   sessionId: string;
-  source: "live" | "session-file";
+  source: "live" | "session-file" | "manifest";
+  selection?: StageSelection;
   cwd: string;
   root: string;
   dryRun: boolean;
@@ -77,7 +78,14 @@ interface StartedTool {
   sourceEventId: string;
 }
 
+export interface StageSelection {
+  manifest: string;
+  head: string;
+  mutations: Array<{ sessionId: string; sourceEventId: string; resultEventId: string; path: string }>;
+}
+
 export interface StageOptions {
+  manifest?: string;
   input?: string;
   sessionFile?: string;
   cwd?: string;
@@ -436,10 +444,11 @@ function bashWarnings(collected: CollectedStage): { warnings: BashWarning[]; cou
   return { warnings: matched.slice(0, MAX_BASH_WARNINGS), count: matched.length };
 }
 
-async function collect(options: StageOptions): Promise<{ collected: CollectedStage; source: "live" | "session-file" }> {
-  if (options.input !== undefined && options.sessionFile !== undefined) {
-    throw new Error("pass either --input or --session-file, not both");
+async function collect(options: StageOptions): Promise<{ collected: CollectedStage; source: StageReport["source"]; selection?: StageSelection }> {
+  if ([options.input, options.sessionFile, options.manifest].filter(value => value !== undefined).length !== 1) {
+    throw new Error("pass exactly one of --input, --session-file, or --manifest");
   }
+  if (options.manifest !== undefined) return collectManifest(options.manifest, options.session);
   if (options.input !== undefined) {
     const text = await readFile(options.input, "utf8");
     const events: LiveEvent[] = [];
@@ -459,6 +468,58 @@ async function collect(options: StageOptions): Promise<{ collected: CollectedSta
     return { collected: collectStageFromSession(text), source: "session-file" };
   }
   throw new Error("pass --input <events.jsonl> or --session-file <session.jsonl>");
+}
+
+// The manifest selects entire confirmed calls, never reconstructed patches or
+// hunks. Its explicit order can interleave sessions without guessing causality.
+async function collectManifest(path: string, callerSession: string | undefined): Promise<{ collected: CollectedStage; source: "manifest"; selection: StageSelection }> {
+  if (!callerSession) throw new Error("manifest staging requires --session for the calling session");
+  const manifest = resolve(path);
+  const value: unknown = JSON.parse(await readFile(manifest, "utf8"));
+  if (!isObject(value) || value.schemaVersion !== 1 || typeof value.head !== "string" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value.head)
+    || !Array.isArray(value.sources) || value.sources.length === 0 || !Array.isArray(value.mutations) || value.mutations.length === 0
+    || Object.keys(value).some(key => !["schemaVersion", "head", "sources", "mutations"].includes(key))) {
+    throw new Error("invalid staging manifest: expected schemaVersion, head, sources, and ordered mutations");
+  }
+  const sources = new Map<string, CollectedStage>();
+  for (const source of value.sources) {
+    if (!isObject(source) || (source.kind !== "live" && source.kind !== "session-file") || typeof source.path !== "string" || source.path.length === 0
+      || typeof source.sessionId !== "string" || source.sessionId.length === 0 || Object.keys(source).some(key => !["kind", "path", "sessionId"].includes(key))) {
+      throw new Error("invalid manifest source");
+    }
+    if (sources.has(source.sessionId)) throw new Error("duplicate manifest source session");
+    const file = resolve(dirname(manifest), source.path);
+    const { collected } = await collect(source.kind === "live" ? { input: file } : { sessionFile: file });
+    if (collected.sessionId !== source.sessionId) throw new Error("manifest source session ID does not match its evidence");
+    // Never reinterpret relative mutation paths using the target repository.
+    if (!collected.cwd || !isAbsolute(collected.cwd)) throw new Error("manifest source requires an absolute recorded session cwd");
+    sources.set(source.sessionId, collected);
+  }
+  const selected = new Set<string>();
+  const usedSources = new Set<string>();
+  const patches: StagePatch[] = [];
+  const mutations: StageSelection["mutations"] = [];
+  for (const mutation of value.mutations) {
+    if (!isObject(mutation) || typeof mutation.sessionId !== "string" || typeof mutation.resultEventId !== "string" || mutation.resultEventId.length === 0
+      || Object.keys(mutation).some(key => !["sessionId", "resultEventId"].includes(key))) throw new Error("invalid manifest mutation selector");
+    const source = sources.get(mutation.sessionId);
+    if (!source) throw new Error("manifest mutation names an unknown source session");
+    const matches = source.patches.filter(patch => patch.resultEventId === mutation.resultEventId);
+    if (matches.length !== 1) throw new Error(`manifest mutation ${mutation.sessionId}:${mutation.resultEventId} must identify exactly one successful edit or write`);
+    const key = JSON.stringify([mutation.sessionId, mutation.resultEventId]);
+    if (selected.has(key)) throw new Error("duplicate manifest mutation");
+    selected.add(key);
+    usedSources.add(mutation.sessionId);
+    const patch = matches[0]!;
+    const absolute = resolve(source.cwd!, patch.path);
+    patches.push({ ...patch, path: absolute, sourceEventId: `${mutation.sessionId}:${patch.sourceEventId}`, resultEventId: `${mutation.sessionId}:${patch.resultEventId}` });
+    mutations.push({ sessionId: mutation.sessionId, sourceEventId: patch.sourceEventId, resultEventId: patch.resultEventId, path: absolute });
+  }
+  if (usedSources.size !== sources.size) throw new Error("manifest contains an unused source session");
+  return {
+    source: "manifest", selection: { manifest, head: value.head, mutations },
+    collected: { sessionId: callerSession, cwd: undefined, patches, bash: [...sources.entries()].flatMap(([sessionId, source]) => source.bash.map(candidate => ({ ...candidate, sourceEventId: `${sessionId}:${candidate.sourceEventId}` }))) },
+  };
 }
 
 function headId(root: string): string | undefined {
@@ -482,7 +543,7 @@ async function optionalRead(path: string): Promise<Buffer | undefined> {
 // A conflict or interrupted preparation leaves the original index untouched.
 export async function stageChanges(options: StageOptions): Promise<StageReport> {
   options.signal?.throwIfAborted();
-  const { collected, source } = await collect(options);
+  const { collected, source, selection } = await collect(options);
   options.signal?.throwIfAborted();
   const sessionId = collected.sessionId;
   if (sessionId === undefined) throw new Error("the source has no session id");
@@ -505,7 +566,7 @@ export async function stageChanges(options: StageOptions): Promise<StageReport> 
 
   const warnings = bashWarnings(collected);
   const report: StageReport = {
-    schemaVersion: 1, kind: "stage", sessionId, source, cwd, root, dryRun: options.dryRun === true,
+    schemaVersion: 1, kind: "stage", sessionId, source, ...(selection === undefined ? {} : { selection }), cwd, root, dryRun: options.dryRun === true,
     staged: [], unchanged: [], conflicts: [], excluded,
     unattributedBash: warnings.warnings, unattributedBashCount: warnings.count, limit: LIMIT,
   };
@@ -517,6 +578,10 @@ export async function stageChanges(options: StageOptions): Promise<StageReport> 
   try {
     options.signal?.throwIfAborted();
     const head = headId(root);
+    if (selection !== undefined && selection.head !== head) throw new Error("manifest HEAD does not match the repository; inspect and rebuild the selection");
+    if (selection !== undefined && excluded.length > 0) {
+      report.conflicts.push(...excluded.map(issue => ({ ...issue, reason: "selected manifest mutation resolves outside the repository" })));
+    }
     const indexBytes = await optionalRead(indexPath);
     const plans: Array<{ path: string; content: string; mode: string; operation: "edit" | "write"; hunks: number }> = [];
     for (const [path, patches] of groups) {

@@ -125,6 +125,9 @@ npm run dvdst -- live --input .dvdst/live/<session-id>.jsonl
 
 ## Stage a session's changes
 
+For dependent work across sessions, use an [explicit staging manifest](stage-manifests.md).
+It selects exact successful calls in replay order and pins HEAD. The rules below also apply to manifest staging.
+
 `dvdst stage` reads one append-only stream or Pi session file. It replays
 successful exact edits from HEAD, then compares complete replay states with
 the index. All edits in one tool call match the same original content.
