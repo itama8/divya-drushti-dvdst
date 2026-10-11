@@ -111,6 +111,17 @@ prints every field. To add a stream, put a file that exports
 the library; see `docs/extractors.md`. Run `npm link` once to put `dvdst` on the path. See
 section 6a of `docs/usage.md` for selection flags and recipes.
 
+### Give an agent the skill
+
+`skills/dvdst-session-analysis/` is a skill for Pi and Claude Code. It tells an
+agent which command answers which question, how to name sessions, and what
+the rows do and do not support. Link it into the agent's skill directory:
+
+```bash
+ln -s "$PWD/skills/dvdst-session-analysis" ~/.pi/agent/skills/
+ln -s "$PWD/skills/dvdst-session-analysis" ~/.claude/skills/
+```
+
 ### Read canonical files directly
 
 The store is plain JSONL on disk. You do not need the CLI to read it. This is

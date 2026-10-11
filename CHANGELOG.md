@@ -10,6 +10,9 @@
   timestamp prefix, or `latest`. `--last`, `--since`, `--root`, and `--project`
   select several sessions. `handoff`, `handoff-devlog`, and `probe` accept the
   session as a positional argument.
+- `skills/dvdst-session-analysis/SKILL.md` teaches a Pi or Claude Code agent
+  to analyze sessions with the row commands. A test checks that every command,
+  flag, and field it names exists.
 - dvdst reads Claude Code sessions. The row streams, extractors, library,
   `handoff`, `files`, `commands`, and `trace` accept a Claude Code transcript
   and convert it to the entry shape the rest of dvdst reads: one turn per model

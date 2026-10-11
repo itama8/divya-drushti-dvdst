@@ -518,6 +518,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/analysis/extractors.ts` | find and load project extractors |
 | `src/index.ts` | library entry point |
 | `src/cli/analysis.ts` | CLI for the row streams, project extractors, and `schema` |
+| `skills/dvdst-session-analysis/` | agent skill for session analysis with the row commands |
 | `examples/extractors/` | example extractors: orientation and failing commands |
 | `src/cli/dvdst.ts` | dispatcher that routes every subcommand |
 | `bin/dvdst.mjs` | launcher for the `dvdst` binary |

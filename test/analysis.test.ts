@@ -306,3 +306,29 @@ describe("extractors and the library", () => {
     assert.deepEqual(ids, ["fixture-session"]);
   });
 });
+
+describe("the agent skill", () => {
+  it("names only commands, flags, and files that exist", async () => {
+    const { readFile, stat } = await import("node:fs/promises");
+    const skill = await readFile("skills/dvdst-session-analysis/SKILL.md", "utf8");
+    const help = spawnSync(process.execPath, [...DISPATCHER, "--help"], { encoding: "utf8" }).stderr;
+    // A command is `dvdst <name>` at the start of a code line or a code span, not in prose.
+    const commands = new Set([...skill.matchAll(/(?:^|`)dvdst ([a-z][a-z-]*)/gm)].map((match) => match[1]!));
+    assert.ok(commands.size >= 6);
+    for (const command of commands) assert.match(help, new RegExp(`^  ${command}\\s`, "m"), `dvdst ${command} is not a command`);
+
+    const usage = spawnSync(process.execPath, [...DISPATCHER, "calls", "--help"], { encoding: "utf8" }).stderr;
+    for (const flag of new Set(skill.match(/(?<![-\w])--[a-z][a-z-]*/g) ?? [])) assert.ok(usage.includes(flag), `${flag} is not an option of the row commands`);
+    for (const field of ["contextTokens", "durationMs", "exitCode", "truncated", "reads", "mutates", "opaque", "firstPrompt"]) {
+      assert.ok(Object.values(STREAMS).some((stream) => stream.fields.some((entry) => entry.name === field)), `${field} is not a row field`);
+    }
+    for (const path of ["docs/extractors.md", "examples/extractors"]) assert.ok(await stat(path));
+  });
+
+  it("gives recipes that run", () => {
+    for (const args of [["calls", FIXTURE, "--errors"], ["turns", FIXTURE], ["overview", FIXTURE], ["schema", "calls"]]) {
+      const result = spawnSync(process.execPath, [...DISPATCHER, ...args], { encoding: "utf8" });
+      assert.equal(result.status, 0, `dvdst ${args.join(" ")}: ${result.stderr}`);
+    }
+  });
+});
