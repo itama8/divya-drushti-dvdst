@@ -104,7 +104,7 @@ describe("artifact extraction", () => {
     const test = commands.find((entry) => entry.toolCallId === "test-1");
     const classifications = test?.classifications as Array<{ name: string; reason: string; version: number }>;
     assert.deepEqual(classifications.map((classification) => classification.name), ["test"]);
-    assert.equal(classifications[0]?.version, 1);
+    assert.equal(classifications[0]?.version, 2);
     assert.equal((test?.result as { isError: boolean }).isError, false);
     const typecheck = commands.find((entry) => entry.toolCallId === "fail-1");
     assert.deepEqual((typecheck?.classifications as Array<{ name: string }>).map((classification) => classification.name), ["typecheck"]);

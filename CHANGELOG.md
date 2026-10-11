@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- `dvdst overview`, `turns`, `calls`, and `context` read session files directly
+  and write JSONL rows: per-session totals, tokens and cost per model request,
+  tool calls joined to their results with duration and truncation, and system
+  prompt section sizes. `dvdst schema` prints the fields.
+- Session commands accept a file, a session id or id prefix, a filename
+  timestamp prefix, or `latest`. `--last`, `--since`, `--root`, and `--project`
+  select several sessions. `handoff`, `handoff-devlog`, and `probe` accept the
+  session as a positional argument.
+- Bash commands are parsed for the files they read and mutate. The artifact
+  extractor writes `artifacts/bash-file-effects.jsonl`, and `dvdst calls` rows
+  carry `reads`, `mutates`, and `opaque`. A successful bash read of a file now
+  counts as a prior read for `file-modified-without-observed-read`, which also
+  reports the `operation` of the first mutation.
+- A project states command classes and paths to leave out of findings in
+  `.dvdst/config.json`, found through the session cwd or named with `--config`.
+  Derived output records which file applied. The built-in test rule also
+  recognizes `node --test`, `tsx --test`, `go test`, `bun test`, `deno test`,
+  and `make test`. The command classifier is version 2, and the artifact and
+  event extractors are version 2.
+- File findings leave out paths outside the session cwd.
+- The handoff reports `created` commits read from `git commit` output. The
+  loose hexadecimal matches are counted as `candidates` and no longer listed.
+- `dvdst artifacts <session>` normalizes the snapshot first instead of failing
+  on a missing `tool-invocations.jsonl`.
+- `dvdst --help` lists every command with a description. The package declares
+  a `dvdst` binary that runs from any working directory.
 - `dvdst stage` stages exact session edits and writes to paths absent from HEAD
   from a live stream or Pi session file. Complete HEAD replay states make
   repeated staging safe for chained edits and deletions. One conflicting path

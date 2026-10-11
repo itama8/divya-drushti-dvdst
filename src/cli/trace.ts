@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
+import { resolveSession } from "../pi/resolve-sessions.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
 
 guardStdout();
 
 function usage(): never {
-  console.error("Usage: dvdst trace <session.jsonl> --id <recordId> [--format json|tsv|text]");
+  console.error("Usage: dvdst trace <session> --id <recordId> [--format json|tsv|text]");
   process.exit(2);
 }
 
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
   const recordId = values.id;
   const format = values.format === "json" || values.format === "tsv" ? values.format : "text";
 
-  const bundle = await buildProbeBundle({ sessionPath });
+  const bundle = await buildProbeBundle({ sessionPath: await resolveSession(sessionPath) });
   const skillAttributions = bundle.skills.attributedRecords as Array<{ recordId?: string; recordKind?: string; labels?: Array<{ invocationId: string; basis: string }> }>;
   const skillInvocations = bundle.skills.invocations as Array<{ id: string; name: string; mode: string; activeStartLine: number | undefined; activeEndLine: number }>;
   const messages = bundle.goals as unknown[]; // goals reuse the same shape briefly

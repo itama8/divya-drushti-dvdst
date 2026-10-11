@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { guardStdout } from "./stdout.js";
+import { resolveSession } from "../pi/resolve-sessions.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
 import { normalizeSnapshot } from "../normalize/normalize.js";
 import { extractSkills } from "../skills/extract.js";
@@ -14,10 +15,11 @@ guardStdout();
 const DEFAULT_STORE = ".dvdst/store";
 
 function usage(): never {
-  console.error("Usage: dvdst files <session.jsonl> [--path <substring>] [--format json|tsv]");
-  console.error("       dvdst commands <session.jsonl> [--class <test|typecheck|build|lint|dependency>] [--format json|tsv]");
-  console.error("       dvdst skills \"<session.jsonl> | --store <dir> --session <id>\" [--view invocations|attributions] [--format json|tsv]");
-  console.error("See docs/usage.md for the store-mode forms of files and commands.");
+  console.error("Usage: dvdst files <session> [--path <substring>] [--format json|tsv]");
+  console.error("       dvdst commands <session> [--class <test|typecheck|build|lint|dependency>] [--format json|tsv]");
+  console.error("       dvdst skills <session> [--format json|tsv]");
+  console.error("       dvdst <files|commands|skills> --store <dir> --session <id> [--snapshot <sha256>] [--view invocations|spans|attributions]");
+  console.error('A session is a file, a session id or id prefix, or "latest". --view applies to skills in store mode.');
   process.exit(2);
 }
 
@@ -178,7 +180,6 @@ async function main(): Promise<void> {
 
   if (storeMode && sessionPath !== undefined) usage();
   if (storeMode && (values.store === undefined || values.session === undefined)) usage();
-  if (!storeMode && (sessionPath === undefined || sessionPath.startsWith("-"))) usage();
   if (subcommand === "skills" && !["invocations", "spans", "attributions"].includes(values.view!)) usage();
   if (subcommand === "files" && values.view !== "invocations") usage();
   if (subcommand === "commands" && values.view !== "invocations") usage();
@@ -196,7 +197,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const bundle = await buildProbeBundle({ sessionPath: sessionPath! });
+  const bundle = await buildProbeBundle({ sessionPath: await resolveSession(sessionPath) });
 
   if (subcommand === "files") {
     const pathFilter = typeof values.path === "string" ? values.path : undefined;

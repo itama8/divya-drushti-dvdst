@@ -5,6 +5,9 @@
   "type": "module",
   "private": false,
   "license": "MIT",
+  "bin": {
+    "dvdst": "bin/dvdst.mjs"
+  },
   "engines": {
     "node": ">=22"
   },

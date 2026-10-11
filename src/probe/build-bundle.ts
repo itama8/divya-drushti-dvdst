@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { classifyCommand } from "../pi/classify-commands.js";
-import { extractCommitCandidates } from "../pi/extract-commits.js";
+import { extractCommitCandidates, extractCreatedCommits } from "../pi/extract-commits.js";
+import { loadProjectConfig } from "../config/config.js";
 import { normalizeSessionPath } from "../pi/normalize-paths.js";
 import { parseDevlogFrontmatter } from "../pi/parse-devlog.js";
 import { isObject, readJsonl, type SourceRecord, type SourceReference } from "../pi/read-jsonl.js";
@@ -62,6 +63,8 @@ export interface ProbeBundle {
   files: JsonObject[];
   commands: JsonObject[];
   commitCandidates: string[];
+  /** Commits the session created, read from `git commit` output. */
+  commitsCreated: string[];
   skills: { invocations: SkillSeed[]; attributedRecords: JsonObject[] };
   devlogComparison?: JsonObject;
 }
@@ -102,6 +105,7 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
     throw new Error("The session has no valid Pi session header");
   }
   const sessionHeader = headerRecord.value;
+  const config = await loadProjectConfig({ cwd: typeof sessionHeader.cwd === "string" ? sessionHeader.cwd : undefined });
 
   const messages: MessageRecord[] = [];
   const toolCalls: ToolCallRecord[] = [];
@@ -267,7 +271,7 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
       commandPreview: preview(command),
       commandBytes: Buffer.byteLength(command),
       commandHash: sha256(command),
-      classes: classifyCommand(command),
+      classes: classifyCommand(command, config.commandClasses),
       result: result ? {
         isError: result.isError,
         textBytes: Buffer.byteLength(result.text),
@@ -282,6 +286,12 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
     toolCalls
       .filter((call) => call.name === "bash")
       .flatMap((call) => extractCommitCandidates(results.get(call.id)?.text ?? "")),
+  )];
+
+  const commitsCreated = [...new Set(
+    toolCalls
+      .filter((call) => call.name === "bash" && results.get(call.id)?.isError === false)
+      .flatMap((call) => extractCreatedCommits(results.get(call.id)?.text ?? "")),
   )];
 
   const mutatedPaths = fileSummary.filter((file) => file.operations.some((operation) => operation === "edit" || operation === "write")).map((file) => file.path);
@@ -332,6 +342,7 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
     files: fileSummary,
     commands,
     commitCandidates,
+    commitsCreated,
     skills: { invocations: skillSeeds, attributedRecords },
     ...(devlogComparison ? { devlogComparison } : {}),
   };

@@ -3,17 +3,18 @@ import { guardStdout } from "./stdout.js";
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { handoffToText } from "../handoff/summary.js";
+import { resolveSession } from "../pi/resolve-sessions.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
 
 guardStdout();
 
 function usage(): never {
-  console.error("Usage: dvdst probe --session <session.jsonl> [--devlog <devlog.md>] [--out <dir>] [--pretty]");
+  console.error("Usage: dvdst probe <session> [--devlog <devlog.md>] [--out <dir>] [--pretty]");
   process.exit(2);
 }
 
 const stripped = process.argv[2] === "probe" ? process.argv.slice(3) : process.argv.slice(2);
-const { values } = parseArgs({
+const { values, positionals } = parseArgs({
   args: stripped,
   options: {
     session: { type: "string", short: "s" },
@@ -23,13 +24,14 @@ const { values } = parseArgs({
     help: { type: "boolean", short: "h" },
   },
   strict: true,
+  allowPositionals: true,
 });
 
-if (values.help || !values.session) usage();
+if (values.help || positionals.length > 1 || (values.session !== undefined && positionals.length > 0)) usage();
 
 try {
   const bundle = await buildProbeBundle({
-    sessionPath: values.session,
+    sessionPath: await resolveSession(values.session ?? positionals[0]),
     ...(values.devlog ? { devlogPath: values.devlog } : {}),
   });
 

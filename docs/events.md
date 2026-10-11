@@ -58,27 +58,37 @@ observed events in the same file.
 ### file-modified-without-observed-read
 
 A file was mutated (edit or write reported success) and no successful read of
-that path appeared earlier in the session.
+that path appeared earlier in the session. A read is a `read` call or a
+successful bash command whose text names the file, such as `cat`, `sed -n`,
+or `rg` with the file as an operand.
 
 ```json
 {
   "kind": "finding-file-modified-without-observed-read",
   "confidence": "inferred",
   "path": "src/new.ts",
+  "operation": "write",
   "firstMutationLine": 7,
   "unconfirmedReadRequests": 0,
-  "limit": "absence of a read in this session does not prove the agent had no prior knowledge of the file"
+  "limit": "absence of a read in this session does not prove the agent had no prior knowledge of the file; a write may create the file, and a bash command may read it in a way its text does not show"
 }
 ```
 
-A write that creates a new file naturally triggers this finding. The
+A write that creates a new file naturally triggers this finding. `operation`
+is the first mutation of the path, so `select(.operation == "edit")` keeps the
+cases where the agent changed existing text it was never shown. The
 `unconfirmedReadRequests` field counts read calls of that path that had no
-confirmed success, so a reviewer can tell an unexplained edit from a new file.
+confirmed success.
+
+Both file findings cover the project the session worked on. They leave out
+paths outside the session cwd, such as scratch files in `/tmp`, and paths the
+project excludes in its [configuration](#project-rules).
 
 ### tests-not-run-after-final-mutation
 
 The session confirmed at least one file mutation, and no test command was
-observed after the final mutation.
+observed after the final mutation. A test command is a bash command that the
+built-in rules or the [project rules](#project-rules) classify as `test`.
 
 ```json
 {
@@ -118,6 +128,63 @@ command is never treated as a retry of an earlier failure.
   "limit": "exact-text retry matching cannot recognize a retry that modified the command"
 }
 ```
+
+## Bash file effects
+
+Agents read and change files through bash as often as through the dedicated
+tools. The artifact extractor parses each bash command and writes
+`artifacts/bash-file-effects.jsonl`, one record per file the command text
+names:
+
+```json
+{
+  "kind": "bash-file-effect",
+  "confidence": "inferred",
+  "effect": "read",
+  "via": "sed",
+  "path": "src/app.ts",
+  "resolvedPath": "/work/app/src/app.ts",
+  "toolCallId": "call-12",
+  "succeeded": true
+}
+```
+
+`effect` is `read` or `mutation`, and `via` names the command or shell feature:
+`cat`, `sed`, `rg`, `git show`, `sed -i`, `redirect`, `rm`, and so on. The
+parser follows literal `cd` steps, ignores heredoc bodies, and skips any path
+that needs expansion. A search counts as a read only when an operand names a
+file, not a directory.
+
+The record is an inference from the command text. `succeeded` reports the
+whole command, not the one step. A script may touch files its text never
+names. `dvdst calls` reports those cases per call in `opaque`, for example
+`inline node script`.
+
+## Project rules
+
+A project states its own rules in `.dvdst/config.json`, in the directory the
+session ran in:
+
+```json
+{
+  "commandClasses": [
+    { "name": "test", "pattern": "\\bnode\\s+scripts/[\\w.-]+-contract\\.mjs\\b", "reason": "contract script" }
+  ],
+  "findings": { "ignorePaths": ["^\\.devlog/"] }
+}
+```
+
+- `commandClasses` adds command classes. `pattern` is a regular expression
+  tested against the whole command. The rules apply after the built-in ones,
+  and a class name may be new.
+- `findings.ignorePaths` lists regular expressions tested against the path
+  relative to the session cwd. The file findings leave those paths out.
+
+The file is found through the session, so a session is classified the same way
+from any working directory. `--config <file>` names another file. Derived
+output records the path and SHA-256 of the file that applied, and `dvdst
+events` re-extracts a snapshot whose artifacts came from other rules. A file
+that exists but is invalid stops the command.
 
 ## jq recipes
 

@@ -89,6 +89,23 @@ local store. It never touches the Pi sessions.
 
 ## Use dvdst as an agent
 
+### Query sessions as rows
+
+Four commands read session files directly, with no ingest step, and write
+JSONL: `overview` (one row per session), `turns` (one per model request, with
+tokens and cost), `calls` (one per tool call joined to its result), and
+`context` (one per system prompt section).
+
+```bash
+dvdst overview --project omakase-v2 --last 50 | jq -s 'sort_by(-.cost)[:5]'
+dvdst calls latest --errors
+dvdst schema calls
+```
+
+A session is a file, a session id or id prefix, or `latest`. `dvdst schema`
+prints every field. Run `npm link` once to put `dvdst` on the path. See
+section 6a of `docs/usage.md` for selection flags and recipes.
+
 ### Read canonical files directly
 
 The store is plain JSONL on disk. You do not need the CLI to read it. This is

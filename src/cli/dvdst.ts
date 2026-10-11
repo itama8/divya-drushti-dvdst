@@ -6,35 +6,53 @@ import { dirname, join } from "node:path";
 
 guardStdout();
 
-const commands: Record<string, string> = {
-  probe: "probe.ts",
-  live: "live.ts",
-  stage: "stage.ts",
-  export: "export.ts",
-  ingest: "ingest.ts",
-  normalize: "normalize.ts",
-  artifacts: "artifacts.ts",
-  events: "events.ts",
-  timeline: "timeline.ts",
-  handoff: "handoff.ts",
-  "handoff-devlog": "handoff-devlog.ts",
-  sessions: "sessions.ts",
-  files: "records.ts",
-  commands: "records.ts",
-  skills: "records.ts",
-  trace: "trace.ts",
-  cleanup: "cleanup.ts",
+const commands: Record<string, { script: string; summary: string }> = {
+  overview: { script: "analysis.ts", summary: "one row per session: time, tokens, cost, tool totals" },
+  turns: { script: "analysis.ts", summary: "one row per model request: model, tokens, cost, timing" },
+  calls: { script: "analysis.ts", summary: "one row per tool call joined to its result" },
+  context: { script: "analysis.ts", summary: "one row per system prompt section, with its size" },
+  schema: { script: "analysis.ts", summary: "fields of the overview, turns, calls, and context rows" },
+  sessions: { script: "sessions.ts", summary: "list Pi session files under a directory" },
+  files: { script: "records.ts", summary: "files a session read and mutated" },
+  commands: { script: "records.ts", summary: "shell commands of a session, by class" },
+  skills: { script: "records.ts", summary: "skill invocations, spans, and attributions" },
+  trace: { script: "trace.ts", summary: "provenance of one record" },
+  handoff: { script: "handoff.ts", summary: "compact closeout summary of a session" },
+  "handoff-devlog": { script: "handoff-devlog.ts", summary: "draft a devlog from a handoff summary" },
+  probe: { script: "probe.ts", summary: "full evidence bundle of a session" },
+  stage: { script: "stage.ts", summary: "stage one session's edits into the git index" },
+  live: { script: "live.ts", summary: "convert a live event stream to observed evidence" },
+  ingest: { script: "ingest.ts", summary: "snapshot session files into the evidence store" },
+  normalize: { script: "normalize.ts", summary: "write normalized records into a store snapshot" },
+  artifacts: { script: "artifacts.ts", summary: "write file, command, and test artifacts into a snapshot" },
+  events: { script: "events.ts", summary: "write deterministic events and findings into a snapshot" },
+  timeline: { script: "timeline.ts", summary: "read the timeline of a stored live stream" },
+  export: { script: "export.ts", summary: "render stored evidence as markdown or CSV" },
+  cleanup: { script: "cleanup.ts", summary: "remove a local evidence store" },
 };
 
+function usage(status: number): never {
+  console.error("Usage: dvdst <command> [args]    (dvdst <command> --help for its options)");
+  console.error("");
+  for (const [name, command] of Object.entries(commands)) console.error(`  ${name.padEnd(15)} ${command.summary}`);
+  console.error("");
+  console.error('Session commands take a file, a session id or id prefix, or "latest".');
+  console.error("Start with: dvdst overview latest    dvdst schema calls");
+  process.exit(status);
+}
+
 const arg = process.argv[2];
-if (!arg || arg === "--help" || arg === "-h" || !Object.keys(commands).includes(arg)) {
-  console.error(`Usage: dvdst <${Object.keys(commands).join("|")}> [args]`);
-  process.exit(arg ? 0 : 2);
+if (!arg || arg === "--help" || arg === "-h" || arg === "help") usage(arg ? 0 : 2);
+const command = commands[arg];
+if (command === undefined) {
+  console.error(`Unknown command ${JSON.stringify(arg)}.`);
+  usage(2);
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const target = join(here, commands[arg]!);
+const target = join(here, command.script);
 // Forward the subcommand name as argv[0] of the sub-script so parseArgs sees it consistently.
 const rest = process.argv.slice(3);
-const result = spawnSync(process.execPath, [`--import`, `tsx`, target, arg, ...rest], { stdio: "inherit" });
+// Resolve tsx from this package, so the CLI also runs from another working directory.
+const result = spawnSync(process.execPath, [`--import`, import.meta.resolve("tsx"), target, arg, ...rest], { stdio: "inherit" });
 process.exit(result.status ?? 1);

@@ -1,13 +1,15 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { loadProjectConfig } from "../config/config.js";
+import { BASH_EFFECTS_VERSION, parseBashEffects } from "../pi/bash-effects.js";
 import { COMMAND_CLASSIFIER_VERSION, classifyCommandWithReasons } from "../pi/classify-commands.js";
 import { isObject, type SourceReference } from "../pi/read-jsonl.js";
 import { exists, writeAtomic } from "../store/fs-util.js";
 import { readSessionSnapshot } from "../store/read-session.js";
 
 export const ARTIFACT_EXTRACTOR = "pi-artifacts";
-export const ARTIFACT_EXTRACTOR_VERSION = 1;
+export const ARTIFACT_EXTRACTOR_VERSION = 2;
 export const BLOB_THRESHOLD_BYTES = 64 * 1024;
 
 export interface ArtifactsResult {
@@ -25,10 +27,12 @@ export interface ArtifactsResult {
     searches: number;
     commands: number;
     tests: number;
+    bashFileEffects: number;
     unknownTools: number;
     missingResults: number;
     blobs: number;
   };
+  config: { path: string | null; sha256: string | null };
   diagnostics: { line: number; message: string }[];
 }
 
@@ -141,16 +145,22 @@ function unknownRecord(invocation: ToolInvocationRecord): unknown {
  * artifacts/searches.jsonl          web and search-style tools
  * artifacts/commands.jsonl          bash calls with output and classification
  * artifacts/tests.jsonl             commands classified as tests
+ * artifacts/bash-file-effects.jsonl file reads and mutations inferred from
+ *                                   the text of bash commands
  * artifacts/unknown-tools.jsonl     every other tool, never dropped
  *
  * The extractor is deterministic and idempotent. Mutation records state
  * whether the patch is observed from arguments or reconstructed, and never
  * claim an exact final diff without repository before-and-after state.
+ * Command classes use the built-in rules plus the rules in the session
+ * project's `.dvdst/config.json`; the result records which file applied.
  */
 export async function extractArtifacts(options: {
   store: string;
   sessionId: string;
   sourceHash?: string;
+  /** Project rules file. Defaults to `.dvdst/config.json` in the session cwd. */
+  configPath?: string;
 }): Promise<ArtifactsResult> {
   const store = resolve(options.store);
   const snapshotInfo = await readSessionSnapshot(options);
@@ -159,7 +169,11 @@ export async function extractArtifacts(options: {
   const results = parseJsonl<ToolResultRecord>(await readFile(join(recordsDirectory, "tool-results.jsonl"), "utf8"), "tool-results.jsonl");
   const resultByCallId = new Map(results.map((result) => [result.toolCallId, result]));
   const writer = makeBlobWriter(join(store, "blobs", "sha256"));
+  const manifestSource = isObject(snapshotInfo.manifest.source) ? snapshotInfo.manifest.source : {};
+  const sessionCwd = typeof manifestSource.cwd === "string" ? manifestSource.cwd : undefined;
+  const config = await loadProjectConfig({ cwd: sessionCwd, configPath: options.configPath });
 
+  const bashFileEffects: unknown[] = [];
   const fileReads: unknown[] = [];
   const fileMutations: unknown[] = [];
   const searches: unknown[] = [];
@@ -292,7 +306,7 @@ export async function extractArtifacts(options: {
           diagnostics.push({ line: invocation.source.line, message: `bash call ${toolCallId} has no string command; kept as generic` });
           continue;
         }
-        const classifications = classifyCommandWithReasons(command);
+        const classifications = classifyCommandWithReasons(command, config.commandClasses);
         const output = await blobOrText(result?.text ?? "", writer);
         const commandArtifact = {
           schemaVersion: 1,
@@ -317,6 +331,23 @@ export async function extractArtifacts(options: {
           ...(result === undefined ? {} : { resultSource: result.source }),
         };
         commands.push(commandArtifact);
+        const bash = parseBashEffects(command);
+        for (const effect of bash.effects) {
+          bashFileEffects.push({
+            schemaVersion: 1,
+            kind: "bash-file-effect",
+            confidence: "inferred",
+            effect: effect.effect,
+            via: effect.via,
+            path: effect.path,
+            // Relative paths start at the session cwd, where Pi runs bash.
+            ...(isAbsolute(effect.path) ? { resolvedPath: effect.path } : sessionCwd === undefined ? {} : { resolvedPath: join(sessionCwd, effect.path) }),
+            toolCallId,
+            succeeded: result === undefined ? null : !result.isError,
+            parser: { name: "bash-effects", version: BASH_EFFECTS_VERSION },
+            source: invocation.source,
+          });
+        }
         if (classifications.some((classification) => classification.name === "test")) {
           tests.push({
             schemaVersion: 1,
@@ -361,6 +392,7 @@ export async function extractArtifacts(options: {
     writeJsonl("searches.jsonl", searches),
     writeJsonl("commands.jsonl", commands),
     writeJsonl("tests.jsonl", tests),
+    writeJsonl("bash-file-effects.jsonl", bashFileEffects),
     writeJsonl("unknown-tools.jsonl", unknownTools),
   ]);
   const derived = {
@@ -374,10 +406,12 @@ export async function extractArtifacts(options: {
       searches: searches.length,
       commands: commands.length,
       tests: tests.length,
+      bashFileEffects: bashFileEffects.length,
       unknownTools: unknownTools.length,
       missingResults,
       blobs: writer.known.size,
     },
+    config: { path: config.path, sha256: config.sha256 },
     diagnostics,
   };
   await writeAtomic(join(snapshotInfo.path, "derived-artifacts.json"), `${JSON.stringify(derived, null, 2)}\n`);
@@ -397,10 +431,32 @@ export async function extractArtifacts(options: {
       searches: searches.length,
       commands: commands.length,
       tests: tests.length,
+      bashFileEffects: bashFileEffects.length,
       unknownTools: unknownTools.length,
       missingResults,
       blobs: writer.known.size,
     },
+    config: { path: config.path, sha256: config.sha256 },
     diagnostics,
   };
+}
+
+/**
+ * Reports whether a snapshot's artifacts came from this extractor version and
+ * the project rules that apply now. Callers re-extract when it returns false,
+ * so a rule change or an upgrade never leaves stale classes behind.
+ */
+export async function artifactsAreCurrent(snapshotPath: string, options: { configPath?: string } = {}): Promise<boolean> {
+  let derived: unknown;
+  let manifest: unknown;
+  try {
+    derived = JSON.parse(await readFile(join(snapshotPath, "derived-artifacts.json"), "utf8"));
+    manifest = JSON.parse(await readFile(join(snapshotPath, "manifest.json"), "utf8"));
+  } catch {
+    return false;
+  }
+  if (!isObject(derived) || !isObject(derived.extractor) || derived.extractor.version !== ARTIFACT_EXTRACTOR_VERSION) return false;
+  const source = isObject(manifest) && isObject(manifest.source) ? manifest.source : {};
+  const config = await loadProjectConfig({ cwd: typeof source.cwd === "string" ? source.cwd : undefined, configPath: options.configPath });
+  return isObject(derived.config) && derived.config.sha256 === config.sha256;
 }

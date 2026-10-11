@@ -2,17 +2,19 @@
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { buildHandoffSummary, handoffToText } from "../handoff/summary.js";
+import { resolveSession } from "../pi/resolve-sessions.js";
 import { buildProbeBundle } from "../probe/build-bundle.js";
 
 guardStdout();
 
 function usage(): never {
-  console.error("Usage: dvdst handoff --session <session.jsonl> [--devlog <devlog.md>] [--format text|json]");
+  console.error("Usage: dvdst handoff <session> [--devlog <devlog.md>] [--format text|json]");
+  console.error('A session is a file, a session id or id prefix, or "latest". --session <session> is also accepted.');
   process.exit(2);
 }
 
 const stripped = process.argv[2] === "handoff" ? process.argv.slice(3) : process.argv.slice(2);
-const { values } = parseArgs({
+const { values, positionals } = parseArgs({
   args: stripped,
   options: {
     session: { type: "string", short: "s" },
@@ -21,13 +23,14 @@ const { values } = parseArgs({
     help: { type: "boolean", short: "h" },
   },
   strict: true,
+  allowPositionals: true,
 });
 
-if (values.help || !values.session) usage();
+if (values.help || positionals.length > 1 || (values.session !== undefined && positionals.length > 0)) usage();
 
 try {
   const bundle = await buildProbeBundle({
-    sessionPath: values.session,
+    sessionPath: await resolveSession(values.session ?? positionals[0]),
     ...(values.devlog ? { devlogPath: values.devlog } : {}),
   });
   const summary = buildHandoffSummary(bundle);

@@ -12,7 +12,7 @@ export interface HandoffSummary {
   files: { modified: string[]; read: string[] };
   commands: { total: number; byClass: Record<string, number>; failed: number; tests: number };
   tests: { ran: boolean; failures: number; commands: number };
-  commits: { expected: string[]; matched: string[]; missing: string[]; observed: string[]; additional: string[] };
+  commits: { created: string[]; expected: string[]; matched: string[]; missing: string[]; observed: string[]; additional: string[] };
   skills: { names: string[]; explicitCommands: number; loadCandidates: number; attributedRecords: number };
   devlog?: { status: string | null; path: string; expected: string[]; matched: string[]; missing: string[] };
   nextFiles: { expected: string[]; matchedModified: string[] };
@@ -107,6 +107,7 @@ export function buildHandoffSummary(bundle: ProbeBundle): HandoffSummary {
       commands: testCommands,
     },
     commits: {
+      created: bundle.commitsCreated,
       expected: expectedCommits,
       matched: matchedCommits,
       missing: devlogComparison?.commits.missingFromCandidates ?? [],
@@ -165,14 +166,12 @@ export function handoffToText(summary: HandoffSummary): string {
 
   if (summary.commits.expected.length > 0 || summary.commits.observed.length > 0) {
     lines.push("");
-    lines.push(`Commits: matched=${summary.commits.matched.length} expected=${summary.commits.expected.length} observed=${summary.commits.observed.length}`);
+    // `candidates` counts every hexadecimal word in command output. It exists
+    // for devlog matching and says nothing about what the session committed.
+    lines.push(`Commits: created=${summary.commits.created.length} matched=${summary.commits.matched.length} expected=${summary.commits.expected.length} candidates=${summary.commits.observed.length}`);
+    for (const commit of summary.commits.created) lines.push(`- created ${commit}`);
     for (const commit of summary.commits.matched) lines.push(`- matched ${commit}`);
     for (const commit of summary.commits.missing) lines.push(`- missing ${commit}`);
-    if (summary.commits.matched.length === 0) {
-      for (const commit of summary.commits.observed) lines.push(`- observed ${commit}`);
-    } else if (summary.commits.additional.length > 0) {
-      lines.push(`- additional candidates: ${summary.commits.additional.length}`);
-    }
   }
 
   if (summary.devlog) {

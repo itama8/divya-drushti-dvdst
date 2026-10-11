@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { loadProjectConfig } from "../config/config.js";
 import { isObject, type SourceReference } from "../pi/read-jsonl.js";
 import { writeAtomic } from "../store/fs-util.js";
 import { readSessionSnapshot } from "../store/read-session.js";
 
 export const EVENT_EXTRACTOR = "pi-events";
-export const EVENT_EXTRACTOR_VERSION = 1;
+export const EVENT_EXTRACTOR_VERSION = 2;
 
 export interface EventsResult {
   schemaVersion: 1;
@@ -71,6 +72,16 @@ interface FileMutationArtifact {
   source: SourceReference;
 }
 
+interface BashFileEffectArtifact {
+  effect: "read" | "mutation";
+  via: string;
+  path: string;
+  resolvedPath?: string;
+  toolCallId: string;
+  succeeded: boolean | null;
+  source: SourceReference;
+}
+
 interface TestRunArtifact {
   schemaVersion: number;
   kind: "test-run";
@@ -126,6 +137,8 @@ export async function extractEvents(options: {
   store: string;
   sessionId: string;
   sourceHash?: string;
+  /** Project rules file. Defaults to `.dvdst/config.json` in the session cwd. */
+  configPath?: string;
 }): Promise<EventsResult> {
   const store = resolve(options.store);
   const snapshotInfo = await readSessionSnapshot(options);
@@ -139,6 +152,25 @@ export async function extractEvents(options: {
   const fileReads = await parse<FileReadArtifact>("file-reads.jsonl");
   const fileMutations = await parse<FileMutationArtifact>("file-mutations.jsonl");
   const tests = await parse<TestRunArtifact>("tests.jsonl");
+  const bashFileEffects = await parse<BashFileEffectArtifact>("bash-file-effects.jsonl");
+  const manifestSource = isObject(snapshotInfo.manifest.source) ? snapshotInfo.manifest.source : {};
+  const sessionCwd = typeof manifestSource.cwd === "string" ? manifestSource.cwd : undefined;
+  const config = await loadProjectConfig({ cwd: sessionCwd, configPath: options.configPath });
+
+  // Tool paths and bash paths are compared as absolute paths, so a relative
+  // read matches an absolute edit of the same file.
+  const absolutePath = (path: string): string => (isAbsolute(path) || sessionCwd === undefined ? path : join(sessionCwd, path));
+  /**
+   * Findings cover the project the session worked on. A path outside the
+   * session cwd is scratch space, and a project may exclude further paths
+   * such as its own session logs.
+   */
+  const inFindingScope = (path: string): boolean => {
+    if (sessionCwd === undefined) return true;
+    const projectPath = relative(sessionCwd, absolutePath(path));
+    if (projectPath.startsWith("..") || isAbsolute(projectPath)) return false;
+    return !config.ignorePaths.some((pattern) => pattern.test(projectPath));
+  };
 
   const ordered: OrderedEvent[] = [];
   const diagnostics: { line: number; message: string }[] = [];
@@ -226,13 +258,21 @@ export async function extractEvents(options: {
 
   // --- Findings (derived claims, appended last, confidence: inferred) ---
 
-  const confirmedMutations = fileMutations.filter((mutation) => mutation.succeeded === true);
+  const confirmedMutations = fileMutations.filter((mutation) => mutation.succeeded === true && inFindingScope(mutation.path));
   const successfulReads = fileReads.filter((read) => read.succeeded === true);
   const readLinesByPath = new Map<string, number[]>();
   for (const read of successfulReads) {
-    const lines = readLinesByPath.get(read.path) ?? [];
+    const lines = readLinesByPath.get(absolutePath(read.path)) ?? [];
     lines.push(read.source.line);
-    readLinesByPath.set(read.path, lines);
+    readLinesByPath.set(absolutePath(read.path), lines);
+  }
+  // A successful bash command that names the file, such as `sed -n` or `rg`,
+  // showed the agent at least part of it.
+  const bashReadLinesByPath = new Map<string, number[]>();
+  for (const effect of bashFileEffects) {
+    if (effect.effect !== "read" || effect.succeeded !== true) continue;
+    const key = effect.resolvedPath ?? absolutePath(effect.path);
+    bashReadLinesByPath.set(key, [...(bashReadLinesByPath.get(key) ?? []), effect.source.line]);
   }
   const unconfirmedReadRequestsByPath = new Map<string, number>();
   for (const read of fileReads) {
@@ -242,14 +282,16 @@ export async function extractEvents(options: {
   }
 
   const findingRecords: OrderedEvent[] = [];
-  const firstMutationLineByPath = new Map<string, number>();
+  const firstMutationByPath = new Map<string, FileMutationArtifact>();
   for (const mutation of confirmedMutations) {
-    const known = firstMutationLineByPath.get(mutation.path);
-    if (known === undefined || mutation.source.line < known) firstMutationLineByPath.set(mutation.path, mutation.source.line);
+    const known = firstMutationByPath.get(mutation.path);
+    if (known === undefined || mutation.source.line < known.source.line) firstMutationByPath.set(mutation.path, mutation);
   }
   let modifiedWithoutObservedRead = 0;
-  for (const [path, firstMutationLine] of firstMutationLineByPath) {
-    const priorReadLines = (readLinesByPath.get(path) ?? []).filter((line) => line < firstMutationLine);
+  for (const [path, firstMutation] of firstMutationByPath) {
+    const firstMutationLine = firstMutation.source.line;
+    const key = absolutePath(path);
+    const priorReadLines = [...(readLinesByPath.get(key) ?? []), ...(bashReadLinesByPath.get(key) ?? [])].filter((line) => line < firstMutationLine);
     if (priorReadLines.length > 0) continue;
     modifiedWithoutObservedRead += 1;
     findingRecords.push({
@@ -261,9 +303,10 @@ export async function extractEvents(options: {
         finding: "file-modified-without-observed-read",
         label: "a file was mutated before any successful read of that path in this session",
         path,
+        operation: firstMutation.operation,
         firstMutationLine,
         unconfirmedReadRequests: unconfirmedReadRequestsByPath.get(path) ?? 0,
-        limit: "absence of a read in this session does not prove the agent had no prior knowledge of the file",
+        limit: "absence of a read in this session does not prove the agent had no prior knowledge of the file; a write may create the file, and a bash command may read it in a way its text does not show",
         evidence: { artifact: "file-mutations.jsonl", path },
       },
     });
@@ -378,6 +421,7 @@ export async function extractEvents(options: {
       findings: findingRecords.length,
     },
     findings,
+    config: { path: config.path, sha256: config.sha256 },
     diagnostics,
   };
   await writeAtomic(join(snapshotInfo.path, "derived-events.json"), `${JSON.stringify(derived, null, 2)}\n`);
