@@ -192,8 +192,16 @@ dvdst overview --project omakase-v2 --last 50
 dvdst calls --project omakase-v2 --since 2026-10-01 --errors
 ```
 
-Bash calls carry `reads` and `mutates`, the files the command text names, and
-`opaque`, the reasons a command may change files it does not name. `classes`
+Bash calls carry `verbs`, the programs the command runs (`git diff`,
+`npm run build`, `rg`), `reads` and `mutates`, the files the command text
+names, and `opaque`, the reasons a command may change files it does not name.
+
+Three fields relate a call to the calls before it. `rereads` lists files the
+call read again with nothing changed in between: the read tool with the same
+offset and limit, or a whole-file bash read such as `cat`. `commandAttempt`
+counts how many times the session has run that exact bash command.
+`failureRun` counts consecutive failed calls. `overview` totals them in
+`rereadCalls`, `rereadBytes`, `maxFailureRun`, and `inlineScriptCalls`. `classes`
 uses the built-in rules and the project's `.dvdst/config.json`; see
 [`docs/events.md`](events.md#project-rules).
 
@@ -286,6 +294,23 @@ The rows describe what the session file records. `durationMs` of calls made
 in one assistant message is an upper bound, because Pi records one start time
 for the message. A session file with a malformed line is skipped with a
 message on stderr, and the command exits 1 after writing the other sessions.
+
+### The row cache
+
+Rows without `--full` are cached per session file under
+`$XDG_CACHE_HOME/dvdst/rows`, by default `~/.cache/dvdst/rows`. An entry is
+reused while the session file, the dvdst row logic, and the project rules are
+unchanged, so a second query over the same sessions does not parse them again.
+A session that is still growing is parsed each time.
+
+```bash
+dvdst cache            # directory, entry count, and size
+dvdst cache --clear    # empty it
+```
+
+`--no-cache` skips the cache for one command. `DVDST_CACHE=off` turns it off,
+and `DVDST_CACHE_DIR` moves it. `--full` rows and extractors always read the
+session file.
 
 ### Add your own stream
 
@@ -514,6 +539,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/analysis/rows.ts` | derive overview, turns, calls, and context rows, and declare their schema |
 | `src/sources/claude.ts` | convert a Claude Code transcript to the entry shape dvdst reads |
 | `src/sources/read-session.ts` | detect the agent of a session file and read it |
+| `src/analysis/cache.ts` | cache derived rows per session file |
 | `src/analysis/session.ts` | load a session with its rows and project rules |
 | `src/analysis/extractors.ts` | find and load project extractors |
 | `src/index.ts` | library entry point |

@@ -332,3 +332,91 @@ describe("the agent skill", () => {
     }
   });
 });
+
+describe("facts that depend on earlier calls", () => {
+  let id = 0;
+  const call = (name: string, args: unknown, isError = false): unknown[] => {
+    id += 1;
+    return [
+      { type: "message", id: `a${id}`, timestamp: "2026-01-01T00:00:01.000Z", message: { role: "assistant", content: [{ type: "toolCall", id: `c${id}`, name, arguments: args }] } },
+      { type: "message", id: `r${id}`, timestamp: "2026-01-01T00:00:02.000Z", message: { role: "toolResult", toolCallId: `c${id}`, isError, content: [{ type: "text", text: "0123456789" }] } },
+    ];
+  };
+  const rows = deriveRows(
+    records([
+      { type: "session", id: "s2", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/work/app" },
+      ...call("read", { path: "src/a.ts" }),
+      ...call("read", { path: "src/a.ts", offset: 100 }),
+      ...call("read", { path: "src/a.ts" }),
+      ...call("bash", { command: "rg -n foo src/a.ts" }),
+      ...call("bash", { command: "cat src/b.ts" }, true),
+      ...call("bash", { command: "cat src/b.ts" }, true),
+      ...call("bash", { command: "cat src/b.ts" }),
+      ...call("bash", { command: "cd /work/app && cat src/b.ts | head -3" }),
+      ...call("edit", { path: "/work/app/src/a.ts", edits: [] }),
+      ...call("read", { path: "src/a.ts" }),
+      ...call("bash", { command: "node -e 'console.log(1)'; git status --short" }),
+    ]),
+    "/sessions/s2.jsonl",
+  );
+  const field = (name: string): unknown[] => rows.calls.map((row) => row[name]);
+
+  it("marks a read as a re-read only when the same view repeats and nothing changed", () => {
+    assert.deepEqual(field("rereads"), [[], [], ["src/a.ts"], [], [], [], [], ["src/b.ts"], [], [], []]);
+  });
+
+  it("counts repeated commands and consecutive failures", () => {
+    assert.deepEqual(field("commandAttempt"), [null, null, null, 1, 1, 2, 3, 1, null, null, 1]);
+    assert.deepEqual(field("failureRun"), [0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0]);
+  });
+
+  it("names the programs and inline scripts of bash calls", () => {
+    assert.deepEqual(rows.calls.at(-1)!.verbs, ["node", "git status"]);
+    assert.deepEqual(rows.calls.at(-1)!.classes, ["inline-script"]);
+    assert.deepEqual(rows.calls[0]!.verbs, []);
+  });
+
+  it("totals them in the overview", () => {
+    const { rereadCalls, rereadBytes, maxFailureRun, inlineScriptCalls } = rows.overview;
+    assert.deepEqual({ rereadCalls, rereadBytes, maxFailureRun, inlineScriptCalls }, { rereadCalls: 2, rereadBytes: 20, maxFailureRun: 2, inlineScriptCalls: 1 });
+  });
+});
+
+describe("the row cache", () => {
+  it("reuses rows until the session, the rules, or a flag says otherwise", async () => {
+    const { copyFile, appendFile, readdir, utimes } = await import("node:fs/promises");
+    const root = await mkdtemp(join(tmpdir(), "dvdst-cache-"));
+    const cache = join(root, "cache");
+    const session = join(root, "session.jsonl");
+    await copyFile(FIXTURE, session);
+    const run = (args: string[], env: Record<string, string> = {}): string =>
+      execFileSync(process.execPath, [...DISPATCHER, ...args], { encoding: "utf8", env: { ...process.env, DVDST_CACHE: "on", DVDST_CACHE_DIR: cache, ...env } });
+
+    const cold = run(["calls", session]);
+    assert.equal((await readdir(cache)).length, 1);
+    assert.equal(run(["calls", session]), cold, "a warm read returns the same rows");
+    assert.deepEqual(JSON.parse(run(["cache"])).entries, 1);
+
+    // Tamper with the entry: a warm read serves it, and --no-cache does not.
+    const entry = join(cache, (await readdir(cache))[0]!);
+    const stored = JSON.parse(await (await import("node:fs/promises")).readFile(entry, "utf8")) as { rows: { calls: Row[] } };
+    stored.rows.calls[0]!.tool = "from-cache";
+    await writeFile(entry, JSON.stringify(stored));
+    assert.match(run(["calls", session]), /"tool":"from-cache"/);
+    assert.equal(run(["calls", session, "--no-cache"]), cold);
+    assert.equal(run(["calls", session], { DVDST_CACHE: "off" }), cold);
+
+    // A session that grew is derived again.
+    await appendFile(session, `${JSON.stringify({ type: "message", id: "late", timestamp: "2026-08-04T00:10:00.000Z", message: { role: "user", content: [{ type: "text", text: "more" }] } })}\n`);
+    await utimes(session, new Date(), new Date(Date.now() + 5000));
+    assert.doesNotMatch(run(["calls", session]), /from-cache/);
+
+    // Different project rules are a different answer.
+    const rules = join(root, "rules.json");
+    await writeFile(rules, JSON.stringify({ commandClasses: [{ name: "everything", pattern: "." }] }));
+    assert.match(run(["calls", session, "--config", rules]), /"everything"/);
+    assert.doesNotMatch(run(["calls", session]), /"everything"/);
+
+    assert.equal(JSON.parse(run(["cache", "--clear"])).entries, 0);
+  });
+});

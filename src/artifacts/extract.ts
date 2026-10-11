@@ -9,7 +9,7 @@ import { exists, writeAtomic } from "../store/fs-util.js";
 import { readSessionSnapshot } from "../store/read-session.js";
 
 export const ARTIFACT_EXTRACTOR = "pi-artifacts";
-export const ARTIFACT_EXTRACTOR_VERSION = 2;
+export const ARTIFACT_EXTRACTOR_VERSION = 3;
 export const BLOB_THRESHOLD_BYTES = 64 * 1024;
 
 export interface ArtifactsResult {

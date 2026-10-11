@@ -174,6 +174,10 @@ session ran in:
 }
 ```
 
+The built-in classes are `test`, `typecheck`, `build`, `lint`, `dependency`,
+and `inline-script`, a script typed into the command such as `node -e` or a
+python heredoc.
+
 - `commandClasses` adds command classes. `pattern` is a regular expression
   tested against the whole command. The rules apply after the built-in ones,
   and a class name may be new.

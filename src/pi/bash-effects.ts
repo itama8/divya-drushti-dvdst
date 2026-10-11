@@ -1,6 +1,6 @@
 import { isAbsolute, join, normalize } from "node:path";
 
-export const BASH_EFFECTS_VERSION = 1;
+export const BASH_EFFECTS_VERSION = 2;
 
 export interface BashEffect {
   effect: "read" | "mutation";
@@ -14,6 +14,8 @@ export interface BashEffects {
   effects: BashEffect[];
   /** Reasons the command may change files that this parser cannot name. */
   opaque: string[];
+  /** The programs the command runs, in first-use order. Git and package-manager verbs keep their subcommand, as in `git diff` and `npm run build`. `cd` is left out. */
+  verbs: string[];
 }
 
 interface Word {
@@ -266,6 +268,10 @@ function isDevice(path: string): boolean {
 export function parseBashEffects(command: string): BashEffects {
   const effects: BashEffect[] = [];
   const opaque: string[] = [];
+  const verbs: string[] = [];
+  const addVerb = (verb: string): void => {
+    if (!verbs.includes(verb)) verbs.push(verb);
+  };
   const seen = new Set<string>();
   /** Directory of the current simple command, relative to where the command started. Undefined after a `cd` that cannot be followed. */
   let base: string | undefined = "";
@@ -300,6 +306,19 @@ export function parseBashEffects(command: string): BashEffects {
     const verb = head.text.split("/").pop() ?? head.text;
     const rest = words.slice(start + 1);
 
+    if (!head.dynamic && /^[A-Za-z0-9_.+-]+$/.test(verb) && verb !== "cd") {
+      const plain = rest.filter((word) => !word.text.startsWith("-") && !word.dynamic).map((word) => word.text);
+      if (verb === "git") {
+        // Skip the value of `-C <dir>` and `-c <setting>` to reach the subcommand.
+        let index = 0;
+        while (index < rest.length && rest[index]!.text.startsWith("-")) index += rest[index]!.text === "-C" || rest[index]!.text === "-c" ? 2 : 1;
+        addVerb(rest[index] === undefined || rest[index]!.dynamic ? "git" : `git ${rest[index]!.text}`);
+      } else if (verb === "npm" || verb === "pnpm" || verb === "yarn" || verb === "bun") {
+        addVerb([verb, ...plain.slice(0, plain[0] === "run" ? 2 : 1)].join(" "));
+      } else if (!["timeout", "env", "bash", "sh", "zsh", "xargs", "for", "case", "esac", "select", "function"].includes(verb)) {
+        addVerb(verb);
+      }
+    }
     if (verb === "cd") {
       const target = rest.find((word) => !word.text.startsWith("-"));
       if (target === undefined || target.dynamic || target.text === "-") base = undefined;
@@ -465,5 +484,5 @@ export function parseBashEffects(command: string): BashEffects {
   }
 
   runScript(command);
-  return { effects, opaque };
+  return { effects, opaque, verbs };
 }

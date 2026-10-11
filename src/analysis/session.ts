@@ -2,7 +2,8 @@ import { loadProjectConfig, type ProjectConfig } from "../config/config.js";
 import { isObject, type SourceRecord } from "../pi/read-jsonl.js";
 import { readSessionRecords, type SessionSource } from "../sources/read-session.js";
 import { resolveSession, resolveSessions, type ResolveSessionsOptions } from "../pi/resolve-sessions.js";
-import { deriveRows, type Row } from "./rows.js";
+import { readCachedRows, writeCachedRows } from "./cache.js";
+import { deriveRows, type Row, type SessionRows } from "./rows.js";
 
 /** One parsed session: its raw entries and every built-in row stream. */
 export interface SessionData {
@@ -53,6 +54,24 @@ export async function loadSessionFile(path: string, options: LoadSessionOptions 
   const rows = deriveRows(records, path, { full: options.full ?? true, commandClasses: config.commandClasses });
   rows.overview.lines = lines;
   return { source, path, session: rows.overview.session as string, cwd, records, ...rows, config };
+}
+
+/**
+ * Returns the built-in rows of one session file, without arguments or result
+ * text. Rows are cached per session file and reused while the file, the row
+ * logic, and the project rules are unchanged, so a repeated query over a
+ * corpus does not parse every session again.
+ */
+export async function loadSessionRows(path: string, options: { configPath?: string; cache?: boolean } = {}): Promise<SessionRows> {
+  const useCache = options.cache !== false;
+  if (useCache) {
+    const cached = await readCachedRows(path, async (cwd) => (await configFor(cwd, options.configPath)).sha256);
+    if (cached !== undefined) return cached.rows;
+  }
+  const session = await loadSessionFile(path, { full: false, ...(options.configPath === undefined ? {} : { configPath: options.configPath }) });
+  const rows: SessionRows = { overview: session.overview, turns: session.turns, calls: session.calls, context: session.context };
+  if (useCache) await writeCachedRows(path, { rows, cwd: session.cwd, source: session.source, configSha: session.config.sha256 });
+  return rows;
 }
 
 /**

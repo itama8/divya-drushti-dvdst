@@ -10,6 +10,16 @@
   timestamp prefix, or `latest`. `--last`, `--since`, `--root`, and `--project`
   select several sessions. `handoff`, `handoff-devlog`, and `probe` accept the
   session as a positional argument.
+- Rows without `--full` are cached per session file and reused while the
+  session, the row logic, and the project rules are unchanged. `dvdst cache`
+  shows the cache, `dvdst cache --clear` empties it, and `--no-cache` or
+  `DVDST_CACHE=off` skips it.
+- Call rows carry `verbs`, the programs a bash command runs, and three fields
+  that relate a call to the calls before it: `rereads`, `commandAttempt`, and
+  `failureRun`. Overview rows total them in `rereadCalls`, `rereadBytes`,
+  `maxFailureRun`, and `inlineScriptCalls`.
+- The classifier adds the built-in class `inline-script` and is version 3. The
+  artifact extractor is version 3, and the bash parser is version 2.
 - `skills/dvdst-session-analysis/SKILL.md` teaches a Pi or Claude Code agent
   to analyze sessions with the row commands. A test checks that every command,
   flag, and field it names exists.

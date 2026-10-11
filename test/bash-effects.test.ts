@@ -56,13 +56,21 @@ describe("bash file effects", () => {
   });
 
   it("reports what it cannot name instead of guessing", () => {
-    assert.deepEqual(parseBashEffects('rm "$TARGET"'), { effects: [], opaque: ["rm with a computed path"] });
-    assert.deepEqual(parseBashEffects("python3 - <<'PY'\nopen('x','w')\nPY"), { effects: [], opaque: ["inline python3 script"] });
+    assert.deepEqual(parseBashEffects('rm "$TARGET"'), { effects: [], opaque: ["rm with a computed path"], verbs: ["rm"] });
+    assert.deepEqual(parseBashEffects("python3 - <<'PY'\nopen('x','w')\nPY"), { effects: [], opaque: ["inline python3 script"], verbs: ["python3"] });
     assert.deepEqual(parseBashEffects("node -e 'fs.writeFileSync(1)'").opaque, ["inline node script"]);
     assert.deepEqual(parseBashEffects("git apply fix.patch").opaque, ["git apply may rewrite the worktree"]);
-    assert.deepEqual(parseBashEffects('cd "$DIR" && echo x > out.txt'), { effects: [], opaque: ["redirect after a cd that cannot be followed"] });
-    assert.deepEqual(parseBashEffects('cat "$F" src/*.ts'), { effects: [], opaque: [] }, "an unnamed read is not a risk");
-    assert.deepEqual(parseBashEffects("node scripts/build.mjs"), { effects: [], opaque: [] });
+    assert.deepEqual(parseBashEffects('cd "$DIR" && echo x > out.txt'), { effects: [], opaque: ["redirect after a cd that cannot be followed"], verbs: ["echo"] });
+    assert.deepEqual(parseBashEffects('cat "$F" src/*.ts'), { effects: [], opaque: [], verbs: ["cat"] }, "an unnamed read is not a risk");
+    assert.deepEqual(parseBashEffects("node scripts/build.mjs"), { effects: [], opaque: [], verbs: ["node"] });
+  });
+
+  it("lists the programs a command runs", () => {
+    const verbs = (command: string): string[] => parseBashEffects(command).verbs;
+    assert.deepEqual(verbs("cd /repo && git -C sub diff --stat | head -5; npm run --silent build && npm test"), ["git diff", "head", "npm run build", "npm test"]);
+    assert.deepEqual(verbs("FOO=1 timeout 60 node scripts/x.mjs 2>&1 | tail -3"), ["node", "tail"]);
+    assert.deepEqual(verbs("for f in a b; do rg -n x \"$f\"; done; rg y"), ["rg"]);
+    assert.deepEqual(verbs("bash -c 'ls && cat a.md'"), ["ls", "cat"]);
   });
 });
 

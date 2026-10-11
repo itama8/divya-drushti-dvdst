@@ -7,7 +7,7 @@
  *     console.log(session.session, session.overview.cost, session.calls.length);
  *   }
  */
-export { loadSession, loadSessionFile, loadSessions, type LoadSessionOptions, type SessionData } from "./analysis/session.js";
+export { loadSession, loadSessionFile, loadSessionRows, loadSessions, type LoadSessionOptions, type SessionData } from "./analysis/session.js";
 export { deriveRows, STREAMS, ROWS_SCHEMA_VERSION, type FieldSpec, type Row, type SessionRows, type StreamName, type StreamSpec } from "./analysis/rows.js";
 export { findExtractor, listExtractorFiles, loadExtractorFile, type Extractor, type LoadedExtractor } from "./analysis/extractors.js";
 export { resolveSession, resolveSessions, SessionResolveError, type ResolveSessionsOptions } from "./pi/resolve-sessions.js";

@@ -2,7 +2,8 @@
 import { parseArgs } from "node:util";
 import { extractorDirectories, findExtractor, listExtractorFiles, loadExtractorFile, type LoadedExtractor } from "../analysis/extractors.js";
 import { STREAMS, type FieldSpec, type Row, type StreamName } from "../analysis/rows.js";
-import { loadSessionFile } from "../analysis/session.js";
+import { cacheUsage, clearCache } from "../analysis/cache.js";
+import { loadSessionFile, loadSessionRows } from "../analysis/session.js";
 import { resolveSessions, type SourceSelection } from "../pi/resolve-sessions.js";
 import { guardStdout } from "./stdout.js";
 
@@ -14,9 +15,10 @@ const FULL_ONLY = ["args", "resultText", "text"];
 
 function usage(status = 2): never {
   console.error("Usage: dvdst <overview|turns|calls|context> [session...] [--last <n>] [--since <date>] [--root <dir>] [--project <name>] [--source pi|claude|all]");
-  console.error("                                                  [--tool <name>] [--errors] [--full] [--config <file>] [--format jsonl|json|tsv]");
+  console.error("                                                  [--tool <name>] [--errors] [--full] [--config <file>] [--no-cache] [--format jsonl|json|tsv]");
   console.error("       dvdst rows <extractor|file> [session...]   run a project extractor with the same selection and format options");
   console.error("       dvdst schema [stream|extractor] [--format text|json]");
+  console.error("       dvdst cache [--clear]                       show or empty the row cache");
   console.error("");
   for (const name of STREAM_NAMES) console.error(`  ${name.padEnd(9)} ${STREAMS[name].description}`);
   console.error("");
@@ -91,6 +93,8 @@ async function main(): Promise<void> {
       errors: { type: "boolean", default: false },
       full: { type: "boolean", default: false },
       config: { type: "string" },
+      "no-cache": { type: "boolean", default: false },
+      clear: { type: "boolean", default: false },
       format: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
@@ -104,6 +108,13 @@ async function main(): Promise<void> {
     const format = values.format ?? "text";
     if (format !== "text" && format !== "json") usage();
     await printSchema(positionals[0], format);
+    return;
+  }
+
+  if (subcommand === "cache") {
+    if (positionals.length > 0) usage();
+    if (values.clear) await clearCache();
+    process.stdout.write(`${JSON.stringify(await cacheUsage())}\n`);
     return;
   }
 
@@ -147,10 +158,15 @@ async function main(): Promise<void> {
   for (const path of paths) {
     let rows: Row[];
     try {
-      // An extractor always gets arguments and result text; it decides what to keep.
-      const session = await loadSessionFile(path, { full: values.full || extractor !== undefined, ...(values.config === undefined ? {} : { configPath: values.config }) });
-      if (extractor !== undefined) rows = [...(await extractor.derive(session))];
-      else rows = builtIn === "overview" ? [session.overview] : session[builtIn!];
+      const config = values.config === undefined ? {} : { configPath: values.config };
+      if (extractor !== undefined) {
+        // An extractor always gets arguments and result text; it decides what to keep.
+        rows = [...(await extractor.derive(await loadSessionFile(path, { full: true, ...config })))];
+      } else {
+        // Rows without payloads come from the cache when the session is unchanged.
+        const session = values.full ? await loadSessionFile(path, { full: true, ...config }) : await loadSessionRows(path, { ...config, cache: !values["no-cache"] });
+        rows = builtIn === "overview" ? [session.overview] : session[builtIn!];
+      }
     } catch (error) {
       // One unreadable session, such as one still being appended, must not hide the rest.
       failed += 1;

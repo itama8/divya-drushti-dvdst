@@ -20,7 +20,7 @@ with the same arguments. It works from any directory.
 | --- | --- | --- |
 | `dvdst overview` | session | time, tokens, cost, tool totals, first prompt |
 | `dvdst turns` | model request | tokens, context size, cost, model, generation time |
-| `dvdst calls` | tool call with its result | what ran, duration, exit code, result size, truncation, files read and changed |
+| `dvdst calls` | tool call with its result | what ran, duration, exit code, result size, truncation, files read and changed, repeats |
 | `dvdst context` | system prompt section | what the session started with, and its size |
 
 Run `dvdst schema calls` before you write a filter. It prints every field with
@@ -62,7 +62,25 @@ dvdst calls --last 50 | jq -r 'select(.truncated) | .reads[]' | sort | uniq -c |
 
 # context growth across one session
 dvdst turns latest | jq -c '{turn, contextTokens, outputTokens, calls}'
+
+# what kind of bash work a project does: group by program, not by your own regex
+dvdst calls --last 50 --tool bash | jq -r '.verbs[]' | sort | uniq -c | sort -rn | head -20
+
+# the same failing command run again and again
+dvdst calls --last 50 --errors | jq -c 'select(.commandAttempt >= 3) | {session, seq, commandAttempt, failureRun, command}'
+
+# files read again with nothing changed in between
+dvdst calls --last 50 | jq -r '.rereads[]' | sort | uniq -c | sort -rn | head
 ```
+
+Use the fields the rows already carry before you write a pattern over
+`command`: `verbs` names the programs a bash call runs, `classes` groups them
+(`test`, `build`, `typecheck`, `inline-script`, and the project's own),
+`rereads` marks repeated reads, and `commandAttempt` and `failureRun` count
+repeats and consecutive failures. `overview` totals them per session.
+
+Rows are cached per session, so run dvdst again for each question. Do not copy
+rows to a file first.
 
 `calls` takes `--tool <name>` and `--errors`. Add `--full` only when you need
 the arguments and result text of specific calls, and filter first:

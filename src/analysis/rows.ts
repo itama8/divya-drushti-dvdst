@@ -47,7 +47,11 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("turns", "number", "Assistant messages. Each one is one model request."),
       field("calls", "number", "Tool calls."),
       field("errorCalls", "number", "Tool calls whose result reported an error."),
-      field("truncatedCalls", "number", "Tool calls whose result Pi cut at its output limit."),
+      field("truncatedCalls", "number", "Tool calls whose result the agent cut at its output limit."),
+      field("rereadCalls", "number", "Tool calls that read a whole file, or one slice of it, that the session had already read and not changed since."),
+      field("rereadBytes", "number", "Result bytes of those calls."),
+      field("maxFailureRun", "number", "Longest run of consecutive failed tool calls."),
+      field("inlineScriptCalls", "number", "Bash calls that ran a script typed into the command, such as node -e or a python heredoc."),
       field("tools", "object", "Tool call count by tool name."),
       field("callsBeforeFirstMutation", "number|null", "Tool calls before the first edit or write. Bash mutations do not count. Null when the session never edited or wrote a file."),
       field("inputTokens", "number", "Sum of uncached input tokens over all turns."),
@@ -102,10 +106,14 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("model", "string|null", "Model that made the call."),
       field("path", "string|null", "The path argument. Relative to the session cwd when inside it."),
       field("command", "string|null", "The command argument of a bash call, in full."),
+      field("verbs", "string[]", "Programs a bash call runs, in first-use order, read from the command text. Git and package-manager verbs keep their subcommand: git diff, npm run build. Empty for other tools."),
       field("classes", "string[]", "Command classes, for example test or build, from the built-in rules and the project's .dvdst/config.json."),
       field("reads", "string[]", "Files the call read. For bash, inferred from the command text: cat, sed -n, rg, and similar. Relative to the session cwd when inside it."),
       field("mutates", "string[]", "Files the call changed. For bash, inferred from the command text: sed -i, redirections, rm, and similar."),
       field("opaque", "string[]", "Reasons a bash call may change files its text does not name, for example an inline script."),
+      field("rereads", "string[]", "Files in reads that the session had already read the same way and not changed since: the read tool with the same offset and limit, or a whole-file bash read such as cat."),
+      field("commandAttempt", "number|null", "For bash, how many times the session has run this exact command text, counting this call. Null for other tools."),
+      field("failureRun", "number", "Consecutive failed tool calls ending at this one. 0 when this call did not fail."),
       field("argBytes", "number", "Bytes of the serialized arguments."),
       field("startedAt", "string|null", "When the call was recorded: for Pi, when the assistant message was appended; for Claude Code, when the call's own block arrived."),
       field("endedAt", "string|null", "Timestamp of the tool result."),
@@ -145,6 +153,7 @@ const TRUNCATION_MARKER = /\[Showing lines \d+-\d+ of \d+[^\]]*\]\s*$|^<persiste
 // Pi ends a failed bash result with the exit code; Claude Code starts with it.
 const EXIT_CODE = /Command exited with code (\d+)\s*$|^Exit code (\d+)\b/;
 const MUTATING_TOOLS = new Set(["edit", "write"]);
+const WHOLE_FILE_READS = new Set(["cat", "nl", "bat", "less", "more"]);
 
 function bytes(text: string): number {
   return Buffer.byteLength(text);
@@ -213,6 +222,8 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
   const calls: Row[] = [];
   const context: Row[] = [];
   const pending = new Map<string, Row>();
+  /** Per call, the keys that identify what it read, for the re-read pass below. */
+  const readKeys: Array<Array<{ path: string; key: string }>> = [];
   const models: string[] = [];
 
   for (const record of records) {
@@ -291,7 +302,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
         const args = isObject(block.arguments) ? block.arguments : {};
         const command = block.name === "bash" ? stringOrNull(args.command) : null;
         const path = typeof args.path === "string" ? relativeToCwd(args.path, cwd) : null;
-        const bash = command === null ? { effects: [], opaque: [] } : parseBashEffects(command);
+        const bash = command === null ? { effects: [], opaque: [], verbs: [] } : parseBashEffects(command);
         const bashPaths = (effect: "read" | "mutation"): string[] => [...new Set(bash.effects.filter((entry) => entry.effect === effect).map((entry) => relativeToCwd(entry.path, cwd)))];
         const call: Row = {
           session,
@@ -305,10 +316,14 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
           model,
           path,
           command,
+          verbs: bash.verbs,
           classes: command === null ? [] : classifyCommand(command, commandClasses),
           reads: command !== null ? bashPaths("read") : block.name === "read" && path !== null ? [path] : [],
           mutates: command !== null ? bashPaths("mutation") : MUTATING_TOOLS.has(block.name as string) && path !== null ? [path] : [],
           opaque: bash.opaque,
+          rereads: [],
+          commandAttempt: null,
+          failureRun: 0,
           argBytes: bytes(JSON.stringify(args)),
           startedAt: isoTimestamp(block.timestamp) ?? entryTime,
           endedAt: null,
@@ -322,6 +337,13 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
         };
         calls.push(call);
         pending.set(block.id as string, call);
+        if (block.name === "read" && path !== null) {
+          readKeys.push([{ path, key: `read\u0000${path}\u0000${String(args.offset ?? "")}\u0000${String(args.limit ?? "")}` }]);
+        } else {
+          // A search or a line range shows a different part each time; only a whole-file read repeats itself.
+          const whole = bash.effects.filter((entry) => entry.effect === "read" && WHOLE_FILE_READS.has(entry.via)).map((entry) => relativeToCwd(entry.path, cwd));
+          readKeys.push([...new Set(whole)].map((wholePath) => ({ path: wholePath, key: `whole\u0000${wholePath}` })));
+        }
       }
       continue;
     }
@@ -345,6 +367,31 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
     }
   }
 
+  // Facts that depend on the calls before: repeated reads, repeated commands, and failure runs.
+  const seenReads = new Map<string, Set<string>>();
+  const commandCounts = new Map<string, number>();
+  let failureRun = 0;
+  for (const [index, call] of calls.entries()) {
+    const rereads: string[] = [];
+    for (const { path: readPath, key } of readKeys[index] ?? []) {
+      const seen = seenReads.get(readPath) ?? new Set<string>();
+      if (seen.has(key)) rereads.push(readPath);
+      // A failed read showed nothing, so a later read of the file is not a repeat.
+      else if (call.isError !== true) seen.add(key);
+      seenReads.set(readPath, seen);
+    }
+    call.rereads = rereads;
+    // After a change the file is new to the agent again.
+    for (const changed of call.mutates as string[]) seenReads.delete(changed);
+    if (typeof call.command === "string") {
+      const attempt = (commandCounts.get(call.command) ?? 0) + 1;
+      commandCounts.set(call.command, attempt);
+      call.commandAttempt = attempt;
+    }
+    failureRun = call.isError === true ? failureRun + 1 : 0;
+    call.failureRun = failureRun;
+  }
+
   const tools: Record<string, number> = {};
   for (const call of calls) tools[call.tool as string] = (tools[call.tool as string] ?? 0) + 1;
   const firstMutation = calls.findIndex((call) => MUTATING_TOOLS.has(call.tool as string));
@@ -366,6 +413,10 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
     calls: calls.length,
     errorCalls: calls.filter((call) => call.isError === true).length,
     truncatedCalls: calls.filter((call) => call.truncated === true).length,
+    rereadCalls: calls.filter((call) => (call.rereads as string[]).length > 0).length,
+    rereadBytes: sum(calls.filter((call) => (call.rereads as string[]).length > 0), "resultBytes"),
+    maxFailureRun: calls.reduce((longest, call) => Math.max(longest, call.failureRun as number), 0),
+    inlineScriptCalls: calls.filter((call) => (call.classes as string[]).includes("inline-script")).length,
     tools: Object.fromEntries(Object.entries(tools).sort(([left], [right]) => left.localeCompare(right))),
     callsBeforeFirstMutation: firstMutation < 0 ? null : firstMutation,
     inputTokens: sum(turns, "inputTokens"),

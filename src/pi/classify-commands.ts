@@ -1,4 +1,6 @@
-export const COMMAND_CLASSIFIER_VERSION = 2;
+import { parseBashEffects } from "./bash-effects.js";
+
+export const COMMAND_CLASSIFIER_VERSION = 3;
 
 export interface CommandClass {
   name: string;
@@ -19,8 +21,11 @@ const CLASS_RULES: CommandClassRule[] = [
   { name: "dependency", pattern: /(^|\s)(npm|pnpm|yarn)\s+(install|ci|add|remove|update)\b|\bcargo\s+(add|update|remove)\b|\bpip\s+install\b|\bapt(-get)?\s+install\b/, reason: "dependency installation or update command" },
 ];
 
+const INLINE_SCRIPT = "inline-script";
+
 /**
- * Classifies a shell command as test, typecheck, build, lint, or dependency.
+ * Classifies a shell command as test, typecheck, build, lint, dependency, or
+ * inline-script.
  * The result is deterministic: one class per matched rule, built-in rules
  * first, then the project rules in their configured order. Each class names
  * its matching rule, so consumers can audit or regenerate the classification
@@ -31,6 +36,11 @@ export function classifyCommandWithReasons(command: string, projectRules: Comman
   for (const rule of [...CLASS_RULES, ...projectRules]) {
     if (!rule.pattern.test(command) || classes.some((known) => known.name === rule.name)) continue;
     classes.push({ name: rule.name, reason: rule.reason });
+  }
+  // A script typed into the command, such as `node -e` or `python3 - <<EOF`,
+  // is found by parsing, because a heredoc alone may only write a file.
+  if (!classes.some((known) => known.name === INLINE_SCRIPT) && parseBashEffects(command).opaque.some((reason) => reason.startsWith("inline "))) {
+    classes.push({ name: INLINE_SCRIPT, reason: "interpreter run on a script given in the command text" });
   }
   return classes;
 }

@@ -13,6 +13,7 @@ const commands: Record<string, { script: string; summary: string }> = {
   context: { script: "analysis.ts", summary: "one row per system prompt section, with its size" },
   rows: { script: "analysis.ts", summary: "run a project extractor: rows <name|file> [session...]" },
   schema: { script: "analysis.ts", summary: "fields of the row streams and project extractors" },
+  cache: { script: "analysis.ts", summary: "show or empty the row cache: cache [--clear]" },
   sessions: { script: "sessions.ts", summary: "list Pi session files under a directory" },
   files: { script: "records.ts", summary: "files a session read and mutated" },
   commands: { script: "records.ts", summary: "shell commands of a session, by class" },
