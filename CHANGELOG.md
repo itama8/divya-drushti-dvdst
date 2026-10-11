@@ -10,6 +10,13 @@
   timestamp prefix, or `latest`. `--last`, `--since`, `--root`, and `--project`
   select several sessions. `handoff`, `handoff-devlog`, and `probe` accept the
   session as a positional argument.
+- A project adds row streams with extractors: a file in `.dvdst/extractors/`
+  that default-exports `{ derive(session) }`, with an optional `summarize`
+  across sessions. `dvdst <name>` or `dvdst rows <name|file>` runs it with the
+  selection and format options of the built-in streams, and `dvdst schema`
+  lists it. `examples/extractors/` has two.
+- The package exports a library, `loadSession`, `loadSessions`, and the row,
+  bash, classifier, and configuration functions, for scripts run with tsx.
 - Bash commands are parsed for the files they read and mutate. The artifact
   extractor writes `artifacts/bash-file-effects.jsonl`, and `dvdst calls` rows
   carry `reads`, `mutates`, and `opaque`. A successful bash read of a file now

@@ -103,7 +103,9 @@ dvdst schema calls
 ```
 
 A session is a file, a session id or id prefix, or `latest`. `dvdst schema`
-prints every field. Run `npm link` once to put `dvdst` on the path. See
+prints every field. To add a stream, put a file that exports
+`{ derive(session) }` in `.dvdst/extractors/`, or import `loadSessions` from
+the library; see `docs/extractors.md`. Run `npm link` once to put `dvdst` on the path. See
 section 6a of `docs/usage.md` for selection flags and recipes.
 
 ### Read canonical files directly
@@ -165,6 +167,7 @@ compatibility policy, and release checks in `docs/release.md`.
 ## Documentation
 
 - `docs/usage.md` - command reference with real Omakase paths.
+- `docs/extractors.md` - project extractors and the script library.
 - `docs/events.md` - event and finding schema, and per-finding jq recipes.
 - `docs/skills.md` - skill detection, attribution windows, and queries.
 - `docs/cookbook.md` - tested jq recipes for evidence joins.

@@ -5,6 +5,9 @@
   "type": "module",
   "private": false,
   "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "bin": {
     "dvdst": "bin/dvdst.mjs"
   },

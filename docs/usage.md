@@ -255,6 +255,17 @@ in one assistant message is an upper bound, because Pi records one start time
 for the message. A session file with a malformed line is skipped with a
 message on stderr, and the command exits 1 after writing the other sessions.
 
+### Add your own stream
+
+A file in `.dvdst/extractors/` that default-exports `{ derive(session) }`
+becomes a command with the same selection and format options. A script can
+also import `loadSessions` from the library. See
+[`docs/extractors.md`](extractors.md).
+
+```bash
+dvdst rows examples/extractors/failing-commands.mjs --project omakase-v2 --last 50
+```
+
 ### Put `dvdst` on the path
 
 The package declares a `dvdst` binary. Link it once to call it from any
@@ -469,7 +480,11 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/bash-effects.ts` | infer the files a bash command reads and mutates from its text |
 | `src/config/config.ts` | load project command classes and ignored paths from `.dvdst/config.json` |
 | `src/analysis/rows.ts` | derive overview, turns, calls, and context rows, and declare their schema |
-| `src/cli/analysis.ts` | CLI for the row streams and `schema` |
+| `src/analysis/session.ts` | load a session with its rows and project rules |
+| `src/analysis/extractors.ts` | find and load project extractors |
+| `src/index.ts` | library entry point |
+| `src/cli/analysis.ts` | CLI for the row streams, project extractors, and `schema` |
+| `examples/extractors/` | example extractors: orientation and failing commands |
 | `src/cli/dvdst.ts` | dispatcher that routes every subcommand |
 | `bin/dvdst.mjs` | launcher for the `dvdst` binary |
 | `examples/pi-extension/dvdst-live.ts` | observe-only Pi extension that writes live events |

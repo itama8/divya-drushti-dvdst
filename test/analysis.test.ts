@@ -232,8 +232,10 @@ describe("analysis CLI", () => {
     assert.equal(help.status, 0);
     for (const command of ["overview", "calls", "handoff", "stage"]) assert.match(help.stderr, new RegExp(`^  ${command}\\s+\\S`, "m"));
     const unknown = spawnSync(process.execPath, [...DISPATCHER, "nope"], { encoding: "utf8" });
-    assert.equal(unknown.status, 2);
-    assert.match(unknown.stderr, /Unknown command "nope"/);
+    assert.equal(unknown.status, 1);
+    assert.match(unknown.stderr, /Unknown command or extractor "nope"/);
+    const invalid = spawnSync(process.execPath, [...DISPATCHER, "../x"], { encoding: "utf8" });
+    assert.equal(invalid.status, 2);
   });
 
   it("accepts the session as a positional or as --session", () => {
@@ -241,5 +243,66 @@ describe("analysis CLI", () => {
     const flagged = execFileSync(process.execPath, [...DISPATCHER, "handoff", "--session", FIXTURE], { encoding: "utf8" });
     assert.equal(positional, flagged);
     assert.match(positional, /^Session: fixture-session/);
+  });
+});
+
+describe("extractors and the library", () => {
+  it("runs an extractor file per session with declared TSV columns", () => {
+    const output = execFileSync(process.execPath, [...DISPATCHER, "rows", "examples/extractors/orientation.mjs", FIXTURE, "--format", "tsv"], { encoding: "utf8" });
+    const [columns, row] = output.trimEnd().split("\n").map((line) => line.split("\t")) as [string[], string[]];
+    assert.deepEqual(columns.slice(0, 3), ["session", "model", "callsBeforeFirstMutation"]);
+    assert.equal(row[0], "fixture-session");
+  });
+
+  it("applies summarize across the selected sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dvdst-extractor-"));
+    const session = (id: string, command: string): string =>
+      [
+        { type: "session", id, timestamp: "2026-01-01T00:00:00.000Z", cwd: "/work/app" },
+        { type: "message", id: "a", timestamp: "2026-01-01T00:00:01.000Z", message: { role: "assistant", content: [{ type: "toolCall", id: "c", name: "bash", arguments: { command } }] } },
+        { type: "message", id: "r", timestamp: "2026-01-01T00:00:03.000Z", message: { role: "toolResult", toolCallId: "c", isError: true, content: [{ type: "text", text: "no\n\nCommand exited with code 2" }] } },
+      ].map((entry) => JSON.stringify(entry)).join("\n");
+    await writeFile(join(root, "one.jsonl"), session("one", "cd /work/app && npm run build 2>&1 | tail -5"));
+    await writeFile(join(root, "two.jsonl"), session("two", "npm run build"));
+    const output = execFileSync(process.execPath, [...DISPATCHER, "rows", "examples/extractors/failing-commands.mjs", join(root, "one.jsonl"), join(root, "two.jsonl")], { encoding: "utf8" });
+    assert.deepEqual(output.trimEnd().split("\n").map((line) => JSON.parse(line) as Row), [
+      { command: "npm run build", failures: 2, sessions: 2, exitCodes: [2], wastedMs: 4000 },
+    ]);
+  });
+
+  it("finds a project extractor by name and lists it in the schema", async () => {
+    const project = await mkdtemp(join(tmpdir(), "dvdst-project-"));
+    await mkdir(join(project, ".dvdst", "extractors"), { recursive: true });
+    await writeFile(
+      join(project, ".dvdst", "extractors", "tools.mjs"),
+      'export default { description: "tool per call", derive: (session) => session.calls.map((call) => ({ tool: call.tool, hasArgs: call.args !== undefined })) };\n',
+    );
+    const cli = [process.execPath, "--import", import.meta.resolve("tsx"), join(process.cwd(), "src/cli/dvdst.ts")] as const;
+    const fixture = join(process.cwd(), FIXTURE);
+    const run = (args: string[]): string => execFileSync(cli[0], [...cli.slice(1), ...args], { encoding: "utf8", cwd: project });
+    const rows = run(["tools", fixture]).trimEnd().split("\n").map((line) => JSON.parse(line) as Row);
+    assert.ok(rows.length > 0);
+    assert.ok(rows.every((row) => typeof row.tool === "string" && row.hasArgs === true), "an extractor sees full call rows");
+    assert.match(run(["schema"]), /^tools: tool per call$/m);
+    assert.match(run(["schema", "tools", "--format", "json"]), /"summarizes": false/);
+  });
+
+  it("rejects a file that is not an extractor", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dvdst-bad-extractor-"));
+    await writeFile(join(root, "bad.mjs"), "export default { description: 'no derive' };\n");
+    const result = spawnSync(process.execPath, [...DISPATCHER, "rows", join(root, "bad.mjs"), FIXTURE], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must default-export an object with a derive\(session\) function/);
+  });
+
+  it("loads sessions through the library entry point", async () => {
+    const { loadSession, loadSessions } = await import("../src/index.js");
+    const session = await loadSession(FIXTURE);
+    assert.equal(session.session, "fixture-session");
+    assert.equal(session.calls.length, session.overview.calls);
+    assert.ok(session.calls.every((call) => "args" in call), "the library returns full rows by default");
+    const ids: string[] = [];
+    for await (const loaded of loadSessions({ specs: [FIXTURE], full: false })) ids.push(loaded.session);
+    assert.deepEqual(ids, ["fixture-session"]);
   });
 });

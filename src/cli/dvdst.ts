@@ -11,7 +11,8 @@ const commands: Record<string, { script: string; summary: string }> = {
   turns: { script: "analysis.ts", summary: "one row per model request: model, tokens, cost, timing" },
   calls: { script: "analysis.ts", summary: "one row per tool call joined to its result" },
   context: { script: "analysis.ts", summary: "one row per system prompt section, with its size" },
-  schema: { script: "analysis.ts", summary: "fields of the overview, turns, calls, and context rows" },
+  rows: { script: "analysis.ts", summary: "run a project extractor: rows <name|file> [session...]" },
+  schema: { script: "analysis.ts", summary: "fields of the row streams and project extractors" },
   sessions: { script: "sessions.ts", summary: "list Pi session files under a directory" },
   files: { script: "records.ts", summary: "files a session read and mutated" },
   commands: { script: "records.ts", summary: "shell commands of a session, by class" },
@@ -37,13 +38,15 @@ function usage(status: number): never {
   for (const [name, command] of Object.entries(commands)) console.error(`  ${name.padEnd(15)} ${command.summary}`);
   console.error("");
   console.error('Session commands take a file, a session id or id prefix, or "latest".');
+  console.error("A file in .dvdst/extractors/ adds a command of its name; see docs/extractors.md.");
   console.error("Start with: dvdst overview latest    dvdst schema calls");
   process.exit(status);
 }
 
 const arg = process.argv[2];
 if (!arg || arg === "--help" || arg === "-h" || arg === "help") usage(arg ? 0 : 2);
-const command = commands[arg];
+// A name that is not a command may be a project extractor; analysis.ts looks it up.
+const command = commands[arg] ?? (/^[A-Za-z0-9][\w.-]*$/.test(arg) ? { script: "analysis.ts", summary: "" } : undefined);
 if (command === undefined) {
   console.error(`Unknown command ${JSON.stringify(arg)}.`);
   usage(2);
