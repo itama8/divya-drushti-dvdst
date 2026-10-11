@@ -10,6 +10,14 @@
   timestamp prefix, or `latest`. `--last`, `--since`, `--root`, and `--project`
   select several sessions. `handoff`, `handoff-devlog`, and `probe` accept the
   session as a positional argument.
+- dvdst reads Claude Code sessions. The row streams, extractors, library,
+  `handoff`, `files`, `commands`, and `trace` accept a Claude Code transcript
+  and convert it to the entry shape the rest of dvdst reads: one turn per model
+  request, and `bash`, `read`, `edit`, and `write` named and keyed as in Pi.
+  `--source pi|claude|all` chooses whose sessions `latest`, `--last`, and
+  `--since` select, and a session id is found whichever agent wrote it.
+  Overview rows carry `source`. Cost is null where the source records none.
+  The store commands still take Pi sessions only.
 - A project adds row streams with extractors: a file in `.dvdst/extractors/`
   that default-exports `{ derive(session) }`, with an optional `summarize`
   across sessions. `dvdst <name>` or `dvdst rows <name|file>` runs it with the

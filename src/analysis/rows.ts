@@ -34,6 +34,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
     description: "One row per session: size, time, tokens, cost, and tool totals.",
     fields: [
       SESSION_FIELD,
+      field("source", "string", "Agent that wrote the session: pi or claude."),
       field("path", "string", "Session file the row was read from."),
       field("cwd", "string|null", "Working directory recorded in the session header."),
       field("startedAt", "string|null", "Timestamp of the session header."),
@@ -54,9 +55,9 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("cacheReadTokens", "number", "Sum of cache-read tokens over all turns."),
       field("cacheWriteTokens", "number", "Sum of cache-write tokens over all turns."),
       field("peakContextTokens", "number", "Largest input plus cache-read plus cache-write of any one turn."),
-      field("cost", "number", "Sum of the cost Pi recorded per turn, in the provider's currency."),
+      field("cost", "number|null", "Sum of the cost recorded per turn, in the provider's currency. Null when the source records no cost, as with Claude Code."),
       field("resultBytes", "number", "Sum of tool result text bytes."),
-      field("systemPromptBytes", "number", "Bytes of the first system prompt, over all of its sections."),
+      field("systemPromptBytes", "number", "Bytes of the first system prompt, over all of its sections. 0 when the source does not record it, as with Claude Code."),
       field("compactions", "number", "Compaction entries."),
     ],
   },
@@ -67,8 +68,8 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("turn", "number", "1-based index of the assistant message in the session. calls.turn joins to it."),
       field("line", "number", "Line of the assistant message in the session file."),
       field("userTurn", "number", "Count of user messages so far. All turns that answer one prompt share it."),
-      field("startedAt", "string|null", "When Pi started the request."),
-      field("endedAt", "string|null", "When Pi appended the finished message."),
+      field("startedAt", "string|null", "When the agent started the request. Null for Claude Code, which does not record it."),
+      field("endedAt", "string|null", "When the finished message was appended. For Claude Code, when its last block arrived."),
       field("generationMs", "number|null", "endedAt minus startedAt."),
       field("model", "string|null", "Model id."),
       field("provider", "string|null", "Provider id."),
@@ -80,7 +81,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("cacheWriteTokens", "number", "Input tokens written to cache."),
       field("reasoningTokens", "number", "Reasoning tokens, where the provider reports them."),
       field("contextTokens", "number", "inputTokens plus cacheReadTokens plus cacheWriteTokens: the context this request carried."),
-      field("cost", "number", "Cost Pi recorded for the request."),
+      field("cost", "number|null", "Cost recorded for the request. Null when the source records none."),
       field("textBytes", "number", "Bytes of visible text in the message."),
       field("thinkingBytes", "number", "Bytes of thinking text in the message."),
       field("calls", "number", "Tool calls in the message."),
@@ -97,7 +98,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("line", "number", "Line of the assistant message in the session file."),
       field("resultLine", "number|null", "Line of the tool result. Null when the session has no result for the call."),
       field("callId", "string", "Tool call id. Joins to toolCallId in the store streams."),
-      field("tool", "string", "Tool name."),
+      field("tool", "string", "Tool name. The core tools are bash, read, edit, and write for every source; other tools keep the name their agent gives them."),
       field("model", "string|null", "Model that made the call."),
       field("path", "string|null", "The path argument. Relative to the session cwd when inside it."),
       field("command", "string|null", "The command argument of a bash call, in full."),
@@ -106,14 +107,14 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("mutates", "string[]", "Files the call changed. For bash, inferred from the command text: sed -i, redirections, rm, and similar."),
       field("opaque", "string[]", "Reasons a bash call may change files its text does not name, for example an inline script."),
       field("argBytes", "number", "Bytes of the serialized arguments."),
-      field("startedAt", "string|null", "When Pi appended the assistant message. The call started at or after it."),
+      field("startedAt", "string|null", "When the call was recorded: for Pi, when the assistant message was appended; for Claude Code, when the call's own block arrived."),
       field("endedAt", "string|null", "Timestamp of the tool result."),
-      field("durationMs", "number|null", "endedAt minus startedAt. For calls made in one message it is an upper bound, because they share startedAt."),
+      field("durationMs", "number|null", "endedAt minus startedAt. For Pi calls made in one message it is an upper bound, because they share startedAt."),
       field("isError", "boolean|null", "Whether the result reported an error. Null without a result."),
       field("exitCode", "number|null", "Exit code a failed bash result names. Null when the result names none."),
       field("resultBytes", "number|null", "Bytes of result text."),
       field("resultLines", "number|null", "Lines of result text."),
-      field("truncated", "boolean|null", "Whether Pi cut the result at its output limit."),
+      field("truncated", "boolean|null", "Whether the agent cut the result at its output limit."),
       field("args", "object", "Full arguments. Only with --full."),
       field("resultText", "string", "Full result text. Only with --full."),
     ],
@@ -139,8 +140,10 @@ export interface SessionRows {
   context: Row[];
 }
 
-const TRUNCATION_MARKER = /\[Showing lines \d+-\d+ of \d+[^\]]*\]\s*$/;
-const EXIT_CODE = /Command exited with code (\d+)\s*$/;
+// Pi ends a cut result with a line range; Claude Code replaces it with a pointer to a saved file.
+const TRUNCATION_MARKER = /\[Showing lines \d+-\d+ of \d+[^\]]*\]\s*$|^<persisted-output>/;
+// Pi ends a failed bash result with the exit code; Claude Code starts with it.
+const EXIT_CODE = /Command exited with code (\d+)\s*$|^Exit code (\d+)\b/;
 const MUTATING_TOOLS = new Set(["edit", "write"]);
 
 function bytes(text: string): number {
@@ -198,6 +201,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
   const path = resolve(sourcePath);
   let session = sessionIdFromFilename(basename(sourcePath)) ?? basename(sourcePath);
   let cwd: string | null = null;
+  let source = "pi";
   let startedAt: string | null = null;
   let endedAt: string | null = null;
   let firstPrompt: string | undefined;
@@ -221,6 +225,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
     if (entry.type === "session") {
       if (typeof entry.id === "string") session = entry.id;
       cwd = stringOrNull(entry.cwd);
+      if (typeof entry.source === "string") source = entry.source;
       startedAt = entryTime;
       continue;
     }
@@ -275,7 +280,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
         cacheWriteTokens,
         reasoningTokens: numberOrZero(usage.reasoning),
         contextTokens: inputTokens + cacheReadTokens + cacheWriteTokens,
-        cost: numberOrZero(cost.total),
+        cost: typeof cost.total === "number" ? cost.total : null,
         textBytes: bytes(textOf(content)),
         thinkingBytes: content.reduce((sum, block) => sum + (block.type === "thinking" && typeof block.thinking === "string" ? bytes(block.thinking) : 0), 0),
         calls: toolCalls.length,
@@ -305,7 +310,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
           mutates: command !== null ? bashPaths("mutation") : MUTATING_TOOLS.has(block.name as string) && path !== null ? [path] : [],
           opaque: bash.opaque,
           argBytes: bytes(JSON.stringify(args)),
-          startedAt: entryTime,
+          startedAt: isoTimestamp(block.timestamp) ?? entryTime,
           endedAt: null,
           durationMs: null,
           isError: null,
@@ -332,7 +337,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
       call.endedAt = finishedAt;
       call.durationMs = elapsed(call.startedAt as string | null, finishedAt);
       call.isError = message.isError === true;
-      call.exitCode = exit === null ? null : Number(exit[1]);
+      call.exitCode = exit === null ? null : Number(exit[1] ?? exit[2]);
       call.resultBytes = bytes(text);
       call.resultLines = text.length === 0 ? 0 : text.split("\n").length;
       call.truncated = TRUNCATION_MARKER.test(text);
@@ -347,6 +352,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
 
   const overview: Row = {
     session,
+    source,
     path,
     cwd,
     startedAt,
@@ -367,7 +373,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
     cacheReadTokens: sum(turns, "cacheReadTokens"),
     cacheWriteTokens: sum(turns, "cacheWriteTokens"),
     peakContextTokens: turns.reduce((peak, row) => Math.max(peak, numberOrZero(row.contextTokens)), 0),
-    cost: sum(turns, "cost"),
+    cost: turns.some((row) => row.cost !== null) ? sum(turns, "cost") : null,
     resultBytes: sum(calls, "resultBytes"),
     systemPromptBytes: systemPromptBytes ?? 0,
     compactions,

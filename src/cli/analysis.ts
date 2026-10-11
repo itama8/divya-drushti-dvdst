@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { extractorDirectories, findExtractor, listExtractorFiles, loadExtractorFile, type LoadedExtractor } from "../analysis/extractors.js";
 import { STREAMS, type FieldSpec, type Row, type StreamName } from "../analysis/rows.js";
 import { loadSessionFile } from "../analysis/session.js";
-import { resolveSessions } from "../pi/resolve-sessions.js";
+import { resolveSessions, type SourceSelection } from "../pi/resolve-sessions.js";
 import { guardStdout } from "./stdout.js";
 
 guardStdout();
@@ -13,7 +13,7 @@ const STREAM_NAMES = Object.keys(STREAMS) as StreamName[];
 const FULL_ONLY = ["args", "resultText", "text"];
 
 function usage(status = 2): never {
-  console.error("Usage: dvdst <overview|turns|calls|context> [session...] [--last <n>] [--since <date>] [--root <dir>] [--project <name>]");
+  console.error("Usage: dvdst <overview|turns|calls|context> [session...] [--last <n>] [--since <date>] [--root <dir>] [--project <name>] [--source pi|claude|all]");
   console.error("                                                  [--tool <name>] [--errors] [--full] [--config <file>] [--format jsonl|json|tsv]");
   console.error("       dvdst rows <extractor|file> [session...]   run a project extractor with the same selection and format options");
   console.error("       dvdst schema [stream|extractor] [--format text|json]");
@@ -23,6 +23,7 @@ function usage(status = 2): never {
   console.error('A session is a file, a directory, a session id or id prefix, a filename timestamp prefix, or "latest".');
   console.error("With no session, --last and --since select from the Pi session directory of the working directory,");
   console.error("and PI_SESSION_FILE names the current session. Rows go to stdout as JSONL; diagnostics go to stderr.");
+  console.error("Pi and Claude Code sessions are both read. latest, --last, and --since select Pi sessions unless --source says otherwise.");
   console.error("");
   console.error("An extractor is a file in .dvdst/extractors/ that default-exports { derive(session) }.");
   console.error("`dvdst <name>` runs it. See docs/extractors.md.");
@@ -85,6 +86,7 @@ async function main(): Promise<void> {
       project: { type: "string" },
       last: { type: "string" },
       since: { type: "string" },
+      source: { type: "string" },
       tool: { type: "string" },
       errors: { type: "boolean", default: false },
       full: { type: "boolean", default: false },
@@ -131,6 +133,7 @@ async function main(): Promise<void> {
     ...(values.project === undefined ? {} : { project: values.project }),
     ...(values.last === undefined ? {} : { last: Number(values.last) }),
     ...(values.since === undefined ? {} : { since: values.since }),
+    ...(values.source === undefined ? {} : { source: values.source as SourceSelection }),
   });
 
   // Built-in rows stream out per session. Extractor rows are held to the end,

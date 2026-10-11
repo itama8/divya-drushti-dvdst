@@ -1,17 +1,20 @@
 import { loadProjectConfig, type ProjectConfig } from "../config/config.js";
-import { isObject, readJsonl, type SourceRecord } from "../pi/read-jsonl.js";
+import { isObject, type SourceRecord } from "../pi/read-jsonl.js";
+import { readSessionRecords, type SessionSource } from "../sources/read-session.js";
 import { resolveSession, resolveSessions, type ResolveSessionsOptions } from "../pi/resolve-sessions.js";
 import { deriveRows, type Row } from "./rows.js";
 
 /** One parsed session: its raw entries and every built-in row stream. */
 export interface SessionData {
+  /** Agent that wrote the session. */
+  source: SessionSource;
   /** Session file the data was read from. */
   path: string;
   /** Session id from the header. */
   session: string;
   /** Working directory recorded in the header. */
   cwd: string | null;
-  /** Raw entries with the line and byte range of each. */
+  /** Entries with the line and byte range of each. A Claude Code session is converted to the Pi entry shape. */
   records: SourceRecord[];
   overview: Row;
   turns: Row[];
@@ -43,12 +46,13 @@ function configFor(cwd: string | null, configPath: string | undefined): Promise<
 
 /** Reads one session file and derives its rows. */
 export async function loadSessionFile(path: string, options: LoadSessionOptions = {}): Promise<SessionData> {
-  const records = await readJsonl(path);
+  const { source, records, lines } = await readSessionRecords(path);
   const header = records.map((record) => record.value).find((value) => isObject(value) && value.type === "session");
   const cwd = isObject(header) && typeof header.cwd === "string" ? header.cwd : null;
   const config = await configFor(cwd, options.configPath);
   const rows = deriveRows(records, path, { full: options.full ?? true, commandClasses: config.commandClasses });
-  return { path, session: rows.overview.session as string, cwd, records, ...rows, config };
+  rows.overview.lines = lines;
+  return { source, path, session: rows.overview.session as string, cwd, records, ...rows, config };
 }
 
 /**

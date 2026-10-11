@@ -197,6 +197,38 @@ Bash calls carry `reads` and `mutates`, the files the command text names, and
 uses the built-in rules and the project's `.dvdst/config.json`; see
 [`docs/events.md`](events.md#project-rules).
 
+### Pi and Claude Code sessions
+
+dvdst reads sessions of both agents and tells them apart by content. Rows
+have one shape for both, and `overview` rows name the agent in `source`.
+
+```bash
+dvdst overview --project omakase-v2 --source claude
+dvdst overview --project omakase-v2 --source all --since 2026-10-10
+dvdst calls 8f7da1f7 --errors          # an id is found whichever agent wrote it
+```
+
+`latest`, `--last`, and `--since` select Pi sessions unless `--source claude`
+or `--source all` says otherwise. `DVDST_SOURCE` sets the default. Sessions of
+both agents are ordered by start time.
+
+A Claude Code session differs in what it records:
+
+- The core tools are reported as `bash`, `read`, `edit`, and `write`, with a
+  `path` and `edits` beside the original arguments. Other tools keep their
+  Claude Code names.
+- One model request is one turn, though the transcript spreads it over one
+  entry per content block. `line` is the first of them.
+- A call starts when its own block arrived, so `durationMs` is not an upper
+  bound.
+- `cost`, `startedAt` and `generationMs` of a turn, and the system prompt are
+  not recorded. They are null, and `context` has no rows.
+- Subagent sidechain entries are left out.
+
+`handoff`, `files`, `commands`, and `trace` accept a Claude Code session too.
+The store commands, `ingest`, `normalize`, `artifacts`, `events`, and `stage`,
+take Pi sessions only.
+
 `calls` takes `--tool <name>` and `--errors`. `--full` adds the arguments and
 result text to `calls` and the section text to `context`. `--format tsv` and
 `--format json` replace the JSONL default.
@@ -480,6 +512,8 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/bash-effects.ts` | infer the files a bash command reads and mutates from its text |
 | `src/config/config.ts` | load project command classes and ignored paths from `.dvdst/config.json` |
 | `src/analysis/rows.ts` | derive overview, turns, calls, and context rows, and declare their schema |
+| `src/sources/claude.ts` | convert a Claude Code transcript to the entry shape dvdst reads |
+| `src/sources/read-session.ts` | detect the agent of a session file and read it |
 | `src/analysis/session.ts` | load a session with its rows and project rules |
 | `src/analysis/extractors.ts` | find and load project extractors |
 | `src/index.ts` | library entry point |

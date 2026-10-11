@@ -5,7 +5,8 @@ import { extractCommitCandidates, extractCreatedCommits } from "../pi/extract-co
 import { loadProjectConfig } from "../config/config.js";
 import { normalizeSessionPath } from "../pi/normalize-paths.js";
 import { parseDevlogFrontmatter } from "../pi/parse-devlog.js";
-import { isObject, readJsonl, type SourceRecord, type SourceReference } from "../pi/read-jsonl.js";
+import { isObject, type SourceRecord, type SourceReference } from "../pi/read-jsonl.js";
+import { readSessionRecords } from "../sources/read-session.js";
 import { parseSkillBlock, skillNameFromContent } from "../pi/skill-block.js";
 
 type JsonObject = Record<string, unknown>;
@@ -99,7 +100,7 @@ function intersection<T>(left: T[], right: T[]): T[] {
 }
 
 export async function buildProbeBundle(options: BuildBundleOptions): Promise<ProbeBundle> {
-  const [records, sessionStat] = await Promise.all([readJsonl(options.sessionPath), stat(options.sessionPath)]);
+  const [{ records }, sessionStat] = await Promise.all([readSessionRecords(options.sessionPath), stat(options.sessionPath)]);
   const headerRecord = records.find((record) => isObject(record.value) && record.value.type === "session");
   if (!headerRecord || !isObject(headerRecord.value) || typeof headerRecord.value.id !== "string") {
     throw new Error("The session has no valid Pi session header");

@@ -102,6 +102,9 @@ dvdst calls latest --errors
 dvdst schema calls
 ```
 
+These commands read Pi and Claude Code sessions. `--source claude` selects
+Claude Code sessions, and a session id is found whichever agent wrote it.
+
 A session is a file, a session id or id prefix, or `latest`. `dvdst schema`
 prints every field. To add a stream, put a file that exports
 `{ derive(session) }` in `.dvdst/extractors/`, or import `loadSessions` from
