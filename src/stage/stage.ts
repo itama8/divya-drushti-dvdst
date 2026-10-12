@@ -3,6 +3,9 @@ import { mkdtemp, open, readFile, rename, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { LiveDecomposer, LiveEventError, parseLiveEvent, type LiveEvent } from "../live/decompose.js";
+import type { SourceRecord } from "../pi/read-jsonl.js";
+import { claudeToCanonical } from "../sources/claude.js";
+import { detectSource } from "../sources/read-session.js";
 
 const LIMIT = "Exact successful edits from one session or an explicit HEAD-pinned manifest are replayed from HEAD. Writes are allowed only for paths absent from HEAD. Unrelated staged changes, ambiguous anchors, and conflicts block the entire operation. Bash warnings are heuristic, not attribution. After committing, start a new session for further edits.";
 
@@ -236,8 +239,24 @@ export function collectStagePatches(events: LiveEvent[]): CollectedStage {
 }
 
 /**
- * Reads a Pi session file and keeps the confirmed successful edit, write, and
- * bash calls. A call with no result is not confirmed and is skipped.
+ * Converts a Claude Code transcript to the entry shape the collector reads.
+ * Entries of a second session ID mean inherited history, which a fork would
+ * stage as its own work, so they are refused like a forked Pi session file.
+ * Subagent sidechain entries are left out and their mutations are not staged.
+ */
+function claudeStageEntries(records: SourceRecord[]): unknown[] {
+  const sessionIds = new Set<string>();
+  for (const { value } of records) {
+    if (isObject(value) && value.isSidechain !== true && typeof value.sessionId === "string") sessionIds.add(value.sessionId);
+  }
+  if (sessionIds.size > 1) throw new Error("Claude Code transcript contains more than one session ID; inherited mutations cannot be attributed. Start a new session or use an explicit manifest");
+  return claudeToCanonical(records).map(record => record.value);
+}
+
+/**
+ * Reads a Pi session file or a Claude Code transcript and keeps the confirmed
+ * successful edit, write, and bash calls. A call with no result is not
+ * confirmed and is skipped.
  */
 export function collectStageFromSession(text: string): CollectedStage {
   interface SessionCall {
@@ -254,6 +273,7 @@ export function collectStageFromSession(text: string): CollectedStage {
   let sessionId: string | undefined;
   let cwd: string | undefined;
 
+  const records: SourceRecord[] = [];
   for (const [line, raw] of text.split("\n").entries()) {
     if (raw.trim().length === 0) continue;
     let entry: unknown;
@@ -263,6 +283,13 @@ export function collectStageFromSession(text: string): CollectedStage {
       throw new Error(`invalid session JSON at line ${line + 1}`);
     }
     if (!isObject(entry)) throw new Error(`invalid session record at line ${line + 1}`);
+    records.push({ value: entry, source: { line: line + 1, byteStart: 0, byteEnd: 0 } });
+  }
+  // The same source detection and Claude Code adapter the analysis commands use.
+  const entries = detectSource(records) === "claude" ? claudeStageEntries(records) : records.map(({ value }) => value);
+
+  for (const entry of entries) {
+    if (!isObject(entry)) continue;
     if (entry.type === "session") {
       if (sessionId !== undefined || typeof entry.id !== "string") throw new Error("session file must contain one session header");
       if (entry.parentSession !== undefined) throw new Error("forked session files contain inherited mutations; use a live stream recorded for this session or start a new session");

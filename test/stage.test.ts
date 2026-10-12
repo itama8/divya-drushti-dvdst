@@ -152,6 +152,80 @@ describe("stage session file collection", () => {
   });
 });
 
+describe("stage collection from a Claude Code transcript", () => {
+  function claudeLine(uuid: string, type: "assistant" | "user", content: unknown[], extra: Record<string, unknown> = {}): string {
+    return `${JSON.stringify({ type, uuid, sessionId: "claude-1", cwd: "/repo", message: { id: `msg-${uuid}`, role: type, content }, ...extra })}\n`;
+  }
+  const use = (id: string, name: string, input: Record<string, unknown>) => ({ type: "tool_use", id, name, input });
+  const result = (id: string, failed = false) => ({ type: "tool_result", tool_use_id: id, content: "ok", ...(failed ? { is_error: true } : {}) });
+
+  it("keeps successful Write and Edit calls and skips failed, sidechain, and unconfirmed ones", () => {
+    const text = [
+      claudeLine("a1", "assistant", [use("t1", "Write", { file_path: "/repo/notes/a.md", content: "# A\n" })]),
+      claudeLine("u1", "user", [result("t1")]),
+      claudeLine("a2", "assistant", [use("t2", "Edit", { file_path: "/repo/notes/a.md", old_string: "# A", new_string: "# A v2" })]),
+      claudeLine("u2", "user", [result("t2")]),
+      claudeLine("a3", "assistant", [use("t3", "Edit", { file_path: "/repo/notes/a.md", old_string: "missing", new_string: "x" })]),
+      claudeLine("u3", "user", [result("t3", true)]),
+      claudeLine("a4", "assistant", [use("t4", "Bash", { command: "cat >> notes/b.md <<'EOF'\nhi\nEOF" })]),
+      claudeLine("u4", "user", [result("t4")]),
+      claudeLine("a5", "assistant", [use("t5", "Write", { file_path: "/repo/notes/subagent.md", content: "no\n" })], { isSidechain: true }),
+      claudeLine("u5", "user", [result("t5")], { isSidechain: true }),
+      claudeLine("a6", "assistant", [use("t6", "Write", { file_path: "/repo/notes/unconfirmed.md", content: "no\n" })]),
+    ].join("");
+    const collected = collectStageFromSession(text);
+    assert.equal(collected.sessionId, "claude-1");
+    assert.equal(collected.cwd, "/repo");
+    assert.deepEqual(collected.patches.map((entry) => [entry.path, entry.operation, entry.resultEventId]), [
+      ["/repo/notes/a.md", "write", "u1:0"],
+      ["/repo/notes/a.md", "edit", "u2:0"],
+    ]);
+    assert.deepEqual(collected.patches[1]!.edits, [{ oldText: "# A", newText: "# A v2" }]);
+    assert.deepEqual(collected.bash.map((entry) => entry.toolCallId), ["t4"]);
+  });
+
+  it("refuses a transcript that carries a second session's entries", () => {
+    const text = [
+      claudeLine("a1", "assistant", [use("t1", "Write", { file_path: "/repo/a.md", content: "a\n" })]),
+      claudeLine("u1", "user", [result("t1")], { sessionId: "claude-parent" }),
+    ].join("");
+    assert.throws(() => collectStageFromSession(text), /more than one session ID/);
+  });
+
+  it("blocks a replace_all edit whose anchor is not unique instead of replaying one occurrence", () => {
+    const text = [
+      claudeLine("a1", "assistant", [use("t1", "Edit", { file_path: "/repo/a.md", old_string: "x", new_string: "y", replace_all: true })]),
+      claudeLine("u1", "user", [result("t1")]),
+    ].join("");
+    const [edit] = collectStageFromSession(text).patches;
+    assert.deepEqual(planPath("x and x\n", [edit!]), { status: "conflict", reason: "an edit anchor is not unique in the baseline content", sourceEventId: "msg-a1" });
+    assert.deepEqual(planPath("only x\n", [edit!]), { status: "staged", content: "only y\n", operation: "edit", hunks: 1 });
+  });
+
+  it("stages a Claude Code session through the session-file route", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dvdst-stage-claude-"));
+    for (const args of [["init", "-q"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"]]) spawnSync("git", args, { cwd: root });
+    await writeFile(join(root, "tracked.md"), "one\ntwo\n");
+    spawnSync("git", ["add", "."], { cwd: root });
+    spawnSync("git", ["commit", "-qm", "base"], { cwd: root });
+    // Another writer's unstaged change in the same file stays out of the index.
+    await writeFile(join(root, "tracked.md"), "one\nTWO\nforeign\n");
+    const session = join(root, "..", `${Date.now()}-claude-session.jsonl`);
+    await writeFile(session, [
+      claudeLine("a1", "assistant", [use("t1", "Edit", { file_path: join(root, "tracked.md"), old_string: "two", new_string: "TWO" })], { cwd: root }),
+      claudeLine("u1", "user", [result("t1")], { cwd: root }),
+    ].join(""));
+
+    const report = await stageChanges({ sessionFile: session, cwd: root });
+    assert.equal(report.source, "session-file");
+    assert.equal(report.sessionId, "claude-1");
+    assert.deepEqual(report.conflicts, []);
+    assert.deepEqual(report.staged, [{ path: "tracked.md", operation: "edit", hunks: 1 }]);
+    assert.equal(spawnSync("git", ["show", ":tracked.md"], { cwd: root, encoding: "utf8" }).stdout, "one\nTWO\n");
+    assert.equal(await readFile(join(root, "tracked.md"), "utf8"), "one\nTWO\nforeign\n");
+  });
+});
+
 describe("stage path planning", () => {
   it("applies exact anchors and leaves other content alone", () => {
     const plan = planPath("one\ntwo\nthree\n", [patch({ edits: [{ oldText: "two", newText: "TWO" }] })]);

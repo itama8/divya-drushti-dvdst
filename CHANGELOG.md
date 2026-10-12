@@ -31,6 +31,11 @@
   `--since` select, and a session id is found whichever agent wrote it.
   Overview rows carry `source`. Cost is null where the source records none.
   The store commands still take Pi sessions only.
+- `dvdst stage --session-file` accepts a Claude Code transcript, as a single
+  session or as a manifest source. Successful `Edit` and `Write` calls replay
+  like Pi edits and writes. Failed calls and subagent sidechain calls are
+  skipped, and a transcript that carries more than one session ID is refused.
+  A manifest selects a call by `<user entry uuid>:<result index>`.
 - A project adds row streams with extractors: a file in `.dvdst/extractors/`
   that default-exports `{ derive(session) }`, with an optional `summarize`
   across sessions. `dvdst <name>` or `dvdst rows <name|file>` runs it with the

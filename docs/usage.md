@@ -356,6 +356,14 @@ Add `--dry-run` to check the plan without publishing index changes. Use
 but relative mutation paths retain the recorded session directory. Other
 repositories' paths are reported as excluded. Stage each repository separately.
 
+`--session-file` also takes a Claude Code transcript,
+`~/.claude/projects/<project>/<session-id>.jsonl`. Its successful `Edit` and
+`Write` calls replay like Pi edits and writes. An `Edit` with `replace_all`
+replays only when its anchor is unique in the file. Subagent sidechain calls are
+not staged, and a transcript with more than one session ID is refused. In a
+manifest, the result ID of a call is the `uuid` of the user entry that holds its
+`tool_result`, a colon, and the index of that result in the entry.
+
 The report includes `unattributedBash`, a heuristic warning list of successful
 bash commands that look file-mutating. Inspect those warnings and the complete
 staged diff before committing. Start a new session after committing. See
