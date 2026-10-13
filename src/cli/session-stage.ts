@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { guardStdout } from "./stdout.js";
-import { collectStageFromSession, stageChanges } from "../stage/stage.js";
+import { collectStageFromFile, stageChanges } from "../stage/stage.js";
 
 guardStdout();
 const cancellation = new AbortController();
@@ -62,10 +62,12 @@ async function main(): Promise<void> {
     const raw = text.split("\n").filter(line => line.trim()).map(line => JSON.parse(line) as Record<string, unknown>);
     const actualAgent = raw.some(entry => entry.type === "session_meta") ? "codex" : raw.some(entry => typeof entry.sessionId === "string") ? "claude" : "pi";
     if (actualAgent !== agent) throw new Error("transcript agent does not match --agent");
-    const collected = collectStageFromSession(text);
+    const collected = await collectStageFromFile(file);
     if (session && session !== collected.sessionId) throw new Error("transcript session identity does not match --session");
     session = collected.sessionId;
     if (values.list) {
+      const unsupported = collected.bash.filter(call => call.unsupportedPatch);
+      if (unsupported.length) console.error(`Incomplete mutation coverage: ${unsupported.length} exec cell(s) contain unsupported apply_patch syntax. Review these calls before selecting or committing scope.`);
       let patches = collected.patches;
       if (values.after) {
         const cursor = patches.map(patch => patch.resultEventId).lastIndexOf(values.after);

@@ -109,7 +109,8 @@ describe("Codex session staging", () => {
   it("uses each call's recorded cwd and refuses forks, duplicate results, and unsupported successful operations", () => {
     const entries = [line("turn_context", { cwd: "/repo/sub" }), call("a", add), result("a")];
     assert.equal(collectStageFromSession(rollout("/repo", entries)).patches[0]!.path, "/repo/sub/new.txt");
-    assert.throws(() => collectStageFromSession(rollout("/repo", entries, { history_base: {} })), /forked/);
+    assert.throws(() => collectStageFromSession(rollout("/repo", entries, { forked_from_id: "parent" })), /forked/);
+    assert.throws(() => collectStageFromSession(rollout("/repo", entries, { history_base: {} })), /pagination loading/);
     assert.throws(() => collectStageFromSession(rollout("/repo", [...entries, result("a")])), /duplicate/);
     assert.throws(() => collectStageFromSession(rollout("/repo", [call("a", "*** Begin Patch\n*** Delete File: file.txt\n*** End Patch"), result("a")])), /deletes and moves/);
   });

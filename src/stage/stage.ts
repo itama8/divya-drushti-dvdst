@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { collectCodexFile } from "./codex-file.js";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { LiveDecomposer, LiveEventError, parseLiveEvent, type LiveEvent } from "../live/decompose.js";
@@ -32,6 +33,7 @@ export interface StagePatch {
 }
 
 export interface BashCandidate {
+  unsupportedPatch?: boolean;
   command: string;
   toolCallId: string;
   sourceEventId: string;
@@ -503,6 +505,13 @@ function bashWarnings(collected: CollectedStage): { warnings: BashWarning[]; cou
   return { warnings: matched.slice(0, MAX_BASH_WARNINGS), count: matched.length };
 }
 
+export async function collectStageFromFile(file: string): Promise<CollectedStage> {
+  const text = await readFile(file, "utf8");
+  const first = text.split("\n").find(line => line.trim());
+  const header: unknown = first ? JSON.parse(first) : undefined;
+  return isObject(header) && header.type === "session_meta" ? collectCodexFile(file) : collectStageFromSession(text);
+}
+
 async function collect(options: StageOptions): Promise<{ collected: CollectedStage; source: StageReport["source"]; selection?: StageSelection }> {
   if ([options.input, options.sessionFile, options.manifest].filter(value => value !== undefined).length !== 1) {
     throw new Error("pass exactly one of --input, --session-file, or --manifest");
@@ -523,8 +532,7 @@ async function collect(options: StageOptions): Promise<{ collected: CollectedSta
     return { collected: collectStagePatches(events), source: "live" };
   }
   if (options.sessionFile !== undefined) {
-    const text = await readFile(options.sessionFile, "utf8");
-    return { collected: collectStageFromSession(text), source: "session-file" };
+    return { collected: await collectStageFromFile(options.sessionFile), source: "session-file" };
   }
   throw new Error("pass --input <events.jsonl> or --session-file <session.jsonl>");
 }

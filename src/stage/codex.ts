@@ -1,6 +1,7 @@
 import { isAbsolute, resolve } from "node:path";
 import type { SourceRecord } from "../pi/read-jsonl.js";
 import type { CollectedStage, StagePatch } from "./stage.js";
+import { literalToolCalls, type LiteralToolCall } from "./codex-exec.js";
 
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -10,12 +11,6 @@ function outputText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.filter(object).map(part => typeof part.text === "string" ? part.text : "").join("\n");
   return "";
-}
-
-// Never execute recorded JavaScript. Only this single literal call is evidence.
-function wrappedPatch(input: string): string | undefined {
-  const match = /^\s*text\(await tools\.apply_patch\(("(?:[^"\\]|\\.)*")\)\);?\s*$/.exec(input);
-  return match ? JSON.parse(match[1]!) as string : undefined;
 }
 
 function succeeded(output: unknown, wrapper = false): boolean {
@@ -93,17 +88,18 @@ function patches(input: string, cwd: string, sourceEventId: string, resultEventI
   return result;
 }
 
-export function collectCodexStage(records: SourceRecord[]): CollectedStage {
+export function collectCodexStage(records: SourceRecord[], verifiedPagination = false): CollectedStage {
   const collected: CollectedStage = { agent: "codex", sessionId: undefined, cwd: undefined, patches: [], bash: [] };
   let cwd: string | undefined;
-  const calls = new Map<string, { patch?: string; bash?: string; wrapper: boolean; cwd: string; id: string }>();
+  const calls = new Map<string, { patch?: string; batch?: LiteralToolCall[]; bash?: string; wrapper: boolean; cwd: string; id: string }>();
   const finished = new Set<string>();
   for (const { value, source } of records) {
     if (!object(value) || !object(value.payload)) continue;
     const payload = value.payload;
     if (value.type === "session_meta") {
-      if (collected.sessionId !== undefined || typeof payload.id !== "string" || typeof payload.cwd !== "string" || !isAbsolute(payload.cwd)) throw new Error("Codex rollout requires one session_meta with id and absolute cwd");
-      if (payload.history_base !== undefined || payload.forked_from_id !== undefined) throw new Error("forked Codex history is unsupported; use a fresh session");
+      if ((collected.sessionId !== undefined && (!verifiedPagination || payload.id !== collected.sessionId)) || typeof payload.id !== "string" || typeof payload.cwd !== "string" || !isAbsolute(payload.cwd)) throw new Error("Codex rollout requires one session_meta with id and absolute cwd");
+      if (payload.forked_from_id !== undefined) throw new Error("forked Codex history is unsupported; use a fresh session");
+      if (payload.history_base !== undefined && !verifiedPagination) throw new Error("Codex continuation requires verified session-file pagination loading");
       collected.sessionId = payload.id;
       collected.cwd = cwd = payload.cwd;
     } else if (value.type === "turn_context" && typeof payload.cwd === "string") {
@@ -115,7 +111,7 @@ export function collectCodexStage(records: SourceRecord[]): CollectedStage {
         if (!cwd) throw new Error("Codex call has no recorded cwd");
         if (calls.has(payload.call_id)) throw new Error("duplicate Codex tool call");
         const name = typeof payload.name === "string" ? payload.name.replace(/^functions\./, "") : "";
-        let patch: string | undefined, bash: string | undefined;
+        let patch: string | undefined, bash: string | undefined, batch: LiteralToolCall[] | undefined;
         if (name === "apply_patch") {
           if (payload.type === "custom_tool_call" && typeof payload.input === "string") patch = payload.input;
           else {
@@ -124,13 +120,13 @@ export function collectCodexStage(records: SourceRecord[]): CollectedStage {
           }
           if (patch === undefined) throw new Error("invalid Codex apply_patch arguments");
         } else if (name === "exec" && typeof payload.input === "string") {
-          patch = wrappedPatch(payload.input);
-          if (patch === undefined) bash = payload.input; // heuristic warning only
+          batch = literalToolCalls(payload.input);
+          if (batch === undefined) bash = payload.input; // heuristic warning only
         } else if (name === "exec_command" || name === "shell_command" || name === "shell") {
           const args: unknown = JSON.parse(String(payload.arguments));
           if (object(args) && typeof (args.cmd ?? args.command) === "string") bash = (args.cmd ?? args.command) as string;
         }
-        calls.set(payload.call_id, { ...(patch === undefined ? {} : { patch }), ...(bash === undefined ? {} : { bash }), wrapper: name === "exec", cwd, id: `codex:call:${payload.call_id}` });
+        calls.set(payload.call_id, { ...(patch === undefined ? {} : { patch }), ...(batch === undefined ? {} : { batch }), ...(bash === undefined ? {} : { bash }), wrapper: name === "exec", cwd, id: `codex:call:${payload.call_id}` });
       } else if ((payload.type === "custom_tool_call_output" || payload.type === "function_call_output") && typeof payload.call_id === "string") {
         const call = calls.get(payload.call_id);
         if (!call) continue;
@@ -138,7 +134,30 @@ export function collectCodexStage(records: SourceRecord[]): CollectedStage {
         finished.add(payload.call_id);
         const resultId = `codex:result:${payload.call_id}`;
         if (call.patch !== undefined && succeeded(payload.output, call.wrapper)) collected.patches.push(...patches(call.patch, call.cwd, call.id, resultId));
-        if (call.bash !== undefined) collected.bash.push({ command: call.bash, toolCallId: payload.call_id, sourceEventId: call.id });
+        if (call.batch !== undefined) {
+          const output = payload.output;
+          const completed = Array.isArray(output) && object(output[0]) && typeof output[0].text === "string" && /^Script completed\n/.test(output[0].text);
+          if (completed && call.batch.some(item => item.name === "apply_patch")) {
+            if (output.length !== call.batch.length + 1) throw new Error("Codex exec output count does not match literal tool calls");
+            const patchCount = call.batch.filter(item => item.name === "apply_patch").length;
+            let patchIndex = 0;
+            for (const [index, item] of call.batch.entries()) {
+              if (item.name === "apply_patch") {
+                const part = output[index + 1];
+                if (!object(part) || part.type !== "input_text" || (part.text !== "{}" && !succeeded(part.text))) throw new Error("Codex exec patch result is not confirmed successful");
+                const id = patchCount === 1 ? resultId : `${resultId}:patch:${patchIndex}`;
+                collected.patches.push(...patches(item.argument as string, call.cwd, call.id, id));
+                patchIndex++;
+              }
+            }
+          }
+          // Shell calls stay warnings, even when sharing a cell with attributable patches.
+          for (const item of call.batch) {
+            if (item.name === "exec_command" && object(item.argument) && typeof item.argument.cmd === "string") collected.bash.push({ command: item.argument.cmd, toolCallId: payload.call_id, sourceEventId: call.id });
+            if (item.name === "write_stdin" && object(item.argument) && typeof item.argument.chars === "string" && item.argument.chars !== "") collected.bash.push({ command: item.argument.chars, toolCallId: payload.call_id, sourceEventId: call.id });
+          }
+        }
+        if (call.bash !== undefined) collected.bash.push({ ...(call.wrapper && call.bash.includes("tools.apply_patch(") ? { unsupportedPatch: true } : {}), command: call.bash, toolCallId: payload.call_id, sourceEventId: call.id });
       }
     }
   }
