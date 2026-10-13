@@ -6,8 +6,9 @@ import { LiveDecomposer, LiveEventError, parseLiveEvent, type LiveEvent } from "
 import type { SourceRecord } from "../pi/read-jsonl.js";
 import { claudeToCanonical } from "../sources/claude.js";
 import { detectSource } from "../sources/read-session.js";
+import { collectCodexStage } from "./codex.js";
 
-const LIMIT = "Exact successful edits from one session or an explicit HEAD-pinned manifest are replayed from HEAD. Writes are allowed only for paths absent from HEAD. Unrelated staged changes, ambiguous anchors, and conflicts block the entire operation. Bash warnings are heuristic, not attribution. After committing, start a new session for further edits.";
+const LIMIT = "Exact successful mutations from Pi, Claude Code, or Codex are replayed from HEAD. Writes are allowed only for paths absent from HEAD. Unrelated staged changes, ambiguous anchors, and conflicts block the entire operation. Bash warnings are heuristic, not attribution. After committing, use a verified --after cursor, a fresh HEAD-pinned manifest, or a new session. No persistent receipt exists.";
 
 const MAX_BASH_WARNINGS = 20;
 const MAX_COMMAND_PREVIEW = 160;
@@ -15,9 +16,13 @@ const MAX_COMMAND_PREVIEW = 160;
 export interface StageEdit {
   oldText: string;
   newText: string;
+  replaceAll?: boolean;
+  lineAnchor?: boolean;
+  endOfFile?: boolean;
 }
 
 export interface StagePatch {
+  orderedAnchors?: boolean;
   path: string;
   operation: "edit" | "write";
   edits: StageEdit[];
@@ -69,6 +74,7 @@ export type PathPlan =
   | { status: "conflict"; reason: string; sourceEventId: string };
 
 export interface CollectedStage {
+  agent?: "pi" | "claude" | "codex";
   sessionId: string | undefined;
   cwd: string | undefined;
   patches: StagePatch[];
@@ -84,10 +90,12 @@ interface StartedTool {
 export interface StageSelection {
   manifest: string;
   head: string;
+  omitted?: Array<{ sessionId: string; resultEventId: string; path: string }>;
   mutations: Array<{ sessionId: string; sourceEventId: string; resultEventId: string; path: string }>;
 }
 
 export interface StageOptions {
+  after?: string;
   manifest?: string;
   input?: string;
   sessionFile?: string;
@@ -104,6 +112,7 @@ export interface GitResult {
 }
 
 const BASH_SIGNALS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "unattributed patch tool", pattern: /\b(?:tools\.)?apply_patch\s*\(/ },
   { name: "heredoc", pattern: /<<-?\s*['"]?[A-Za-z_]/ },
   { name: "redirect", pattern: /(^|[^0-9])>>?\s*[^\s|&;<>()]/ },
   { name: "in-place edit", pattern: /\b(?:sed|perl|ruby)\s+[^|;&]*(?:-i\b|--in-place\b|-pi\b)/ },
@@ -119,6 +128,7 @@ const BASH_SIGNALS: Array<{ name: string; pattern: RegExp }> = [
 // Higher weights survive the warning cap first. Content writers outrank
 // tree-only and temporary-file commands so the important entries stay visible.
 const SIGNAL_WEIGHT: Record<string, number> = {
+  "unattributed patch tool": 6,
   heredoc: 6,
   redirect: 6,
   "git apply or patch": 6,
@@ -178,7 +188,7 @@ function editPatch(toolName: string, args: Record<string, unknown>, sourceEventI
     const edits: StageEdit[] = [];
     for (const operation of rawEdits) {
       if (isObject(operation) && typeof operation.oldText === "string" && typeof operation.newText === "string") {
-        edits.push({ oldText: operation.oldText, newText: operation.newText });
+        edits.push({ oldText: operation.oldText, newText: operation.newText, ...(args.replace_all === true ? { replaceAll: true } : {}) });
       } else throw new Error("successful edit has invalid replacement evidence");
     }
     return { path, operation: "edit", edits, content: undefined, sourceEventId, resultEventId };
@@ -285,6 +295,7 @@ export function collectStageFromSession(text: string): CollectedStage {
     if (!isObject(entry)) throw new Error(`invalid session record at line ${line + 1}`);
     records.push({ value: entry, source: { line: line + 1, byteStart: 0, byteEnd: 0 } });
   }
+  if (records.some(({ value }) => isObject(value) && value.type === "session_meta")) return collectCodexStage(records);
   // The same source detection and Claude Code adapter the analysis commands use.
   const entries = detectSource(records) === "claude" ? claudeStageEntries(records) : records.map(({ value }) => value);
 
@@ -374,18 +385,39 @@ export function planPath(original: string | undefined, patches: StagePatch[]): P
       };
     }
     const replacements: Array<{ from: number; to: number; text: string }> = [];
+    let searchFrom = 0;
+    let located = false;
     for (const edit of patch.edits) {
       if (edit.oldText.length === 0) {
         return { status: "conflict", reason: "an edit anchor is empty", sourceEventId: patch.sourceEventId };
       }
-      const first = work.indexOf(edit.oldText);
-      if (first === -1) {
+      const candidates: number[] = [];
+      let candidate = work.indexOf(edit.oldText, patch.orderedAnchors ? searchFrom : 0);
+      const foundText = candidate !== -1;
+      while (candidate !== -1) {
+        if (!edit.lineAnchor || candidate === 0 || work[candidate - 1] === "\n") candidates.push(candidate);
+        candidate = work.indexOf(edit.oldText, candidate + (edit.replaceAll ? edit.oldText.length : 1));
+      }
+      if (candidates.length === 0 && !foundText) {
         return { status: "conflict", reason: "an edit anchor was not found in the baseline content", sourceEventId: patch.sourceEventId };
       }
-      if (work.indexOf(edit.oldText, first + 1) !== -1) {
+      if (candidates.length === 0) {
+        return { status: "conflict", reason: "a patch hunk does not start at a line boundary", sourceEventId: patch.sourceEventId };
+      }
+      const first = candidates[0]!;
+      if (edit.endOfFile && first + edit.oldText.length !== work.length) {
+        return { status: "conflict", reason: "an end-of-file hunk does not match the baseline EOF", sourceEventId: patch.sourceEventId };
+      }
+      if (!edit.replaceAll && candidates.length > 1 && !(patch.orderedAnchors && located)) {
         return { status: "conflict", reason: "an edit anchor is not unique in the baseline content", sourceEventId: patch.sourceEventId };
       }
-      replacements.push({ from: first, to: first + edit.oldText.length, text: edit.newText });
+      // Codex's recorded hunk order locates the first exact match after a
+      // previously consumed unique locator. No fuzzy or worktree lookup.
+      for (const match of edit.replaceAll ? candidates : [first]) {
+        replacements.push({ from: match, to: match + edit.oldText.length, text: edit.newText });
+      }
+      searchFrom = first + edit.oldText.length;
+      located = true;
     }
     replacements.sort((a, b) => a.from - b.from);
     for (let i = 1; i < replacements.length; i += 1) {
@@ -526,25 +558,39 @@ async function collectManifest(path: string, callerSession: string | undefined):
   const usedSources = new Set<string>();
   const patches: StagePatch[] = [];
   const mutations: StageSelection["mutations"] = [];
+  const omitted: NonNullable<StageSelection["omitted"]> = [];
   for (const mutation of value.mutations) {
     if (!isObject(mutation) || typeof mutation.sessionId !== "string" || typeof mutation.resultEventId !== "string" || mutation.resultEventId.length === 0
-      || Object.keys(mutation).some(key => !["sessionId", "resultEventId"].includes(key))) throw new Error("invalid manifest mutation selector");
+      || Object.keys(mutation).some(key => !["sessionId", "resultEventId", "paths"].includes(key))) throw new Error("invalid manifest mutation selector");
+    if (mutation.paths !== undefined && (!Array.isArray(mutation.paths) || mutation.paths.length === 0 || mutation.paths.some(path => typeof path !== "string" || !isAbsolute(path)))) throw new Error("manifest paths must be a nonempty list of absolute recorded file paths");
     const source = sources.get(mutation.sessionId);
     if (!source) throw new Error("manifest mutation names an unknown source session");
     const matches = source.patches.filter(patch => patch.resultEventId === mutation.resultEventId);
-    if (matches.length !== 1) throw new Error(`manifest mutation ${mutation.sessionId}:${mutation.resultEventId} must identify exactly one successful edit or write`);
+    if (matches.length === 0) throw new Error(`manifest mutation ${mutation.sessionId}:${mutation.resultEventId} must identify a successful mutation call`);
+    if (matches.length > 1 && source.agent !== "codex") throw new Error("manifest selector is ambiguous across successful mutation calls");
+    const requested = mutation.paths === undefined ? undefined : new Set((mutation.paths as string[]).map(path => resolve(path)));
+    if (requested !== undefined) {
+      if (requested.size !== (mutation.paths as string[]).length) throw new Error("duplicate manifest path selection");
+      const available = new Set(matches.map(patch => resolve(source.cwd!, patch.path)));
+      for (const path of requested) if (!available.has(path)) throw new Error("manifest path is not part of the selected successful call");
+    }
     const key = JSON.stringify([mutation.sessionId, mutation.resultEventId]);
     if (selected.has(key)) throw new Error("duplicate manifest mutation");
     selected.add(key);
     usedSources.add(mutation.sessionId);
-    const patch = matches[0]!;
-    const absolute = resolve(source.cwd!, patch.path);
-    patches.push({ ...patch, path: absolute, sourceEventId: `${mutation.sessionId}:${patch.sourceEventId}`, resultEventId: `${mutation.sessionId}:${patch.resultEventId}` });
-    mutations.push({ sessionId: mutation.sessionId, sourceEventId: patch.sourceEventId, resultEventId: patch.resultEventId, path: absolute });
+    for (const patch of matches) {
+      const absolute = resolve(source.cwd!, patch.path);
+      if (requested !== undefined && !requested.has(absolute)) {
+        omitted.push({ sessionId: mutation.sessionId, resultEventId: patch.resultEventId, path: absolute });
+        continue;
+      }
+      patches.push({ ...patch, path: absolute, sourceEventId: `${mutation.sessionId}:${patch.sourceEventId}`, resultEventId: `${mutation.sessionId}:${patch.resultEventId}` });
+      mutations.push({ sessionId: mutation.sessionId, sourceEventId: patch.sourceEventId, resultEventId: patch.resultEventId, path: absolute });
+    }
   }
   if (usedSources.size !== sources.size) throw new Error("manifest contains an unused source session");
   return {
-    source: "manifest", selection: { manifest, head: value.head, mutations },
+    source: "manifest", selection: { manifest, head: value.head, mutations, ...(omitted.length ? { omitted } : {}) },
     collected: { sessionId: callerSession, cwd: undefined, patches, bash: [...sources.entries()].flatMap(([sessionId, source]) => source.bash.map(candidate => ({ ...candidate, sourceEventId: `${sessionId}:${candidate.sourceEventId}` }))) },
   };
 }
@@ -571,6 +617,12 @@ async function optionalRead(path: string): Promise<Buffer | undefined> {
 export async function stageChanges(options: StageOptions): Promise<StageReport> {
   options.signal?.throwIfAborted();
   const { collected, source, selection } = await collect(options);
+  if (options.after !== undefined) {
+    if (selection !== undefined) throw new Error("--after is for one session; use exact selectors for manifests");
+    const cursor = collected.patches.map(patch => patch.resultEventId).lastIndexOf(options.after);
+    if (cursor === -1) throw new Error("--after must identify a successful mutation result in this session");
+    collected.patches = collected.patches.slice(cursor + 1);
+  }
   options.signal?.throwIfAborted();
   const sessionId = collected.sessionId;
   if (sessionId === undefined) throw new Error("the source has no session id");

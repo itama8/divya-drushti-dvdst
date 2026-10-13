@@ -192,13 +192,13 @@ describe("stage collection from a Claude Code transcript", () => {
     assert.throws(() => collectStageFromSession(text), /more than one session ID/);
   });
 
-  it("blocks a replace_all edit whose anchor is not unique instead of replaying one occurrence", () => {
+  it("replays an intentional replace_all edit at every nonoverlapping occurrence", () => {
     const text = [
       claudeLine("a1", "assistant", [use("t1", "Edit", { file_path: "/repo/a.md", old_string: "x", new_string: "y", replace_all: true })]),
       claudeLine("u1", "user", [result("t1")]),
     ].join("");
     const [edit] = collectStageFromSession(text).patches;
-    assert.deepEqual(planPath("x and x\n", [edit!]), { status: "conflict", reason: "an edit anchor is not unique in the baseline content", sourceEventId: "msg-a1" });
+    assert.deepEqual(planPath("x and x\n", [edit!]), { status: "staged", content: "y and y\n", operation: "edit", hunks: 2 });
     assert.deepEqual(planPath("only x\n", [edit!]), { status: "staged", content: "only y\n", operation: "edit", hunks: 1 });
   });
 

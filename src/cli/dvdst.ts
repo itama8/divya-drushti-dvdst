@@ -23,6 +23,7 @@ const commands: Record<string, { script: string; summary: string }> = {
   "handoff-devlog": { script: "handoff-devlog.ts", summary: "draft a devlog from a handoff summary" },
   probe: { script: "probe.ts", summary: "full evidence bundle of a session" },
   stage: { script: "stage.ts", summary: "stage one session's edits into the git index" },
+  "session-stage": { script: "session-stage.ts", summary: "stage Claude or Codex session mutations, or list their selectors" },
   live: { script: "live.ts", summary: "convert a live event stream to observed evidence" },
   ingest: { script: "ingest.ts", summary: "snapshot session files into the evidence store" },
   normalize: { script: "normalize.ts", summary: "write normalized records into a store snapshot" },

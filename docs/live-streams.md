@@ -128,7 +128,7 @@ npm run dvdst -- live --input .dvdst/live/<session-id>.jsonl
 For dependent work across sessions, use an [explicit staging manifest](stage-manifests.md).
 It selects exact successful calls in replay order and pins HEAD. The rules below also apply to manifest staging.
 
-`dvdst stage` reads one append-only stream or Pi session file. It replays
+`dvdst stage` reads one append-only stream, Pi session file, Claude transcript, or Codex rollout. It replays
 successful exact edits from HEAD, then compares complete replay states with
 the index. All edits in one tool call match the same original content.
 Unrelated dirty worktree hunks stay unstaged. The command does not change the
@@ -183,8 +183,8 @@ Limits:
   stream recorded for the new session can still be used.
 - Unmerged entries, symlinks, submodules, binary blobs, and invalid UTF-8 content
   are not supported. These paths conflict instead of being rewritten.
-- Start a new session after committing. Replaying old mutations against a
-  changed HEAD is not supported. No persistent staging receipt exists.
+- After committing, start a new session, select later calls in a fresh manifest,
+  or use a verified `--after <last-committed-result-event-id>` cursor. Old full-session replay against a changed HEAD is not supported. No persistent staging receipt exists.
 - Bash changes are not attributed. The warning detector can miss helper-script
   writes. Recorded tool results do not prove that their changes still exist in
   the worktree. Inspect the complete staged diff before committing.

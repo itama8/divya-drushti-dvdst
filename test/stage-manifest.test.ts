@@ -65,6 +65,14 @@ async function setup() {
 }
 
 describe("explicit cross-session staging", () => {
+  it("still rejects reused Pi result IDs instead of treating them as a multi-file Codex call", async () => fixture(async f => {
+    const file = f.data.sources[0]!.path;
+    await writeFile(file, (await readFile(file, "utf8")).replace('"id":"result-1"', '"id":"result-0"'));
+    const before = await readFile(join(f.root, ".git/index"));
+    await assert.rejects(stageChanges(f.options), /ambiguous/);
+    assert.deepEqual(await readFile(join(f.root, ".git/index")), before);
+  }));
+
   it("interleaves exact calls, preserves foreign dirty hunks, and repeats safely", async () => fixture(async f => {
     await writeFile(join(f.root, "file.txt"), "final\nforeign dirty\n");
     const before = await readFile(join(f.root, ".git/index"));

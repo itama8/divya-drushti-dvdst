@@ -10,7 +10,7 @@ process.on("SIGINT", cancel);
 process.on("SIGTERM", cancel);
 
 function usage(status = 2): never {
-  console.error("Usage: dvdst stage (--input <events.jsonl> | --session-file <session.jsonl> | --manifest <selection.json>) [--cwd <dir>] [--session <id>] [--dry-run]");
+  console.error("Usage: dvdst stage (--input <events.jsonl> | --session-file <session.jsonl> | --manifest <selection.json>) [--cwd <dir>] [--session <id>] [--after <result-event-id>] [--dry-run]");
   console.error("Stages one session or an explicit HEAD-pinned cross-session selection of successful edit and write mutations into the git index, using content anchors. Unrelated working-tree changes stay unstaged. Successful bash commands that look file-mutating are listed in unattributedBash but are not staged.");
   process.exit(status);
 }
@@ -25,6 +25,7 @@ async function main(): Promise<void> {
       manifest: { type: "string" },
       cwd: { type: "string" },
       session: { type: "string" },
+      after: { type: "string" },
       "dry-run": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
@@ -34,6 +35,7 @@ async function main(): Promise<void> {
   if (values.input === undefined && values["session-file"] === undefined && values.manifest === undefined) usage();
 
   const report = await stageChanges({
+    ...(values.after === undefined ? {} : { after: values.after }),
     ...(values.manifest === undefined ? {} : { manifest: values.manifest }),
     ...(values.input === undefined ? {} : { input: values.input }),
     ...(values["session-file"] === undefined ? {} : { sessionFile: values["session-file"] }),
