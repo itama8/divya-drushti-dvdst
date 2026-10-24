@@ -234,8 +234,9 @@ A Claude Code session differs in what it records:
 - Subagent sidechain entries are left out.
 
 `handoff`, `files`, `commands`, and `trace` accept a Claude Code session too.
-The store commands, `ingest`, `normalize`, `artifacts`, `events`, and `stage`,
-take Pi sessions only.
+The store commands, `ingest`, `normalize`, `artifacts`, and `events`, take Pi
+sessions only. Staging also supports Claude Code and Codex evidence through
+the routes described in [session staging](session-staging.md).
 
 `calls` takes `--tool <name>` and `--errors`. `--full` adds the arguments and
 result text to `calls` and the section text to `context`. `--format tsv` and
@@ -359,7 +360,7 @@ repositories' paths are reported as excluded. Stage each repository separately.
 `--session-file` also takes a Claude Code transcript,
 `~/.claude/projects/<project>/<session-id>.jsonl`. Its successful `Edit` and
 `Write` calls replay like Pi edits and writes. An `Edit` with `replace_all`
-replays only when its anchor is unique in the file. Subagent sidechain calls are
+replays all nonoverlapping occurrences. Ordinary edits require unique anchors. Subagent sidechain calls are
 not staged, and a transcript with more than one session ID is refused. In a
 manifest, the result ID of a call is the `uuid` of the user entry that holds its
 `tool_result`, a colon, and the index of that result in the entry.
@@ -368,6 +369,29 @@ The report includes `unattributedBash`, a heuristic warning list of successful
 bash commands that look file-mutating. Inspect those warnings and the complete
 staged diff before committing. Start a new session after committing. See
 [`docs/live-streams.md`](live-streams.md) for transaction behavior and limits.
+
+## 6c. Emit live review frames
+
+Load the [Pi live extension](live-streams.md#pi-adapter), then read its stream:
+
+```bash
+npm run --silent dvdst -- review --input .dvdst/live/<session-id>.jsonl
+npm run --silent dvdst -- review --input .dvdst/live/<session-id>.jsonl --watch --interval-ms 1000
+```
+
+The command emits JSONL when `agent.settled` follows successful `edit` or
+`write` calls. Each inferred frame lists completed mutations, failed bash
+commands, and whether a recognized successful test followed the final
+mutation. No frame is emitted for a settled period without mutations.
+`--watch` polls an existing append-only file and keeps its offset in memory.
+The minimum interval is 100 ms. Restarting replays existing records.
+See [review frames](live-streams.md#review-frames) for fields and limits.
+
+For Claude Code and Codex staging, use `dvdst session-stage --agent
+claude|codex`. See [session staging](session-staging.md) for verified discovery,
+mutation selectors, paginated Codex evidence, and `--after` cursors. Codex
+support here applies to staging, while the analysis rows support Pi and
+Claude Code.
 
 ## 7. Ingest sessions into the evidence store
 
@@ -523,6 +547,8 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/store/read-live.ts` | read a stored live snapshot |
 | `src/store/fs-util.ts` | atomic writes and path helpers for the store |
 | `src/live/decompose.ts` | validate live events and emit observed evidence |
+| `src/live/review.ts` | reduce completed mutations and validation into inferred review frames |
+| `src/cli/review.ts` | read or watch a Pi live stream for review frames |
 | `src/export/render.ts` | render evidence as markdown or CSV |
 | `src/probe/build-bundle.ts` | build the full evidence bundle from a session and optional devlog |
 | `src/handoff/summary.ts` | reduce the bundle to a compact handoff summary and text view |

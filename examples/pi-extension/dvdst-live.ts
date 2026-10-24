@@ -48,7 +48,22 @@ export default function (pi: ExtensionAPI) {
     await writes;
   }
 
-  pi.on("session_start", async (event, ctx) => emit("session.started", { reason: event.reason }, ctx));
+  pi.on("session_start", async (event, ctx) => {
+    await emit("session.started", {
+      reason: event.reason,
+      cwd: ctx.cwd,
+      sessionFile: ctx.sessionManager.getSessionFile(),
+    }, ctx);
+    ctx.ui.setStatus("dvdst-live", ctx.ui.theme.fg("dim", "dvdst: recording"));
+  });
+  pi.on("agent_start", async (_event, ctx) => {
+    await emit("agent.started", {}, ctx);
+    ctx.ui.setStatus("dvdst-live", ctx.ui.theme.fg("accent", "dvdst: recording"));
+  });
+  pi.on("agent_settled", async (_event, ctx) => {
+    await emit("agent.settled", {}, ctx);
+    ctx.ui.setStatus("dvdst-live", ctx.ui.theme.fg("success", "dvdst: review ready"));
+  });
   pi.on("message_end", async (event, ctx) => emit("message.finalized", { message: event.message }, ctx));
   pi.on("tool_execution_start", async (event, ctx) => emit("tool.started", {
     toolCallId: event.toolCallId, toolName: event.toolName, args: event.args,
@@ -68,5 +83,6 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", async (event, ctx) => {
     await emit("session.ended", { reason: event.reason }, ctx);
     await writes;
+    ctx.ui.setStatus("dvdst-live", undefined);
   });
 }

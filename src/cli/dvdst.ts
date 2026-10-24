@@ -25,6 +25,7 @@ const commands: Record<string, { script: string; summary: string }> = {
   stage: { script: "stage.ts", summary: "stage one session's edits into the git index" },
   "session-stage": { script: "session-stage.ts", summary: "stage Claude or Codex session mutations, or list their selectors" },
   live: { script: "live.ts", summary: "convert a live event stream to observed evidence" },
+  review: { script: "review.ts", summary: "emit review-ready frames from a live event stream" },
   ingest: { script: "ingest.ts", summary: "snapshot session files into the evidence store" },
   normalize: { script: "normalize.ts", summary: "write normalized records into a store snapshot" },
   artifacts: { script: "artifacts.ts", summary: "write file, command, and test artifacts into a snapshot" },

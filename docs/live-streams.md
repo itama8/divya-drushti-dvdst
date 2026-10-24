@@ -104,6 +104,7 @@ Pass `--snapshot <sha256>` to `timeline` or `export` to read a prior snapshot in
 The adapter observes these Pi lifecycle events:
 
 - session start and shutdown
+- agent start and settled state
 - finalized messages
 - tool start, update, and finish
 - compaction
@@ -122,6 +123,39 @@ Process the stream during or after the session:
 ```bash
 npm run dvdst -- live --input .dvdst/live/<session-id>.jsonl
 ```
+
+## Review frames
+
+`dvdst review` reads the extension's append-only stream. It emits one JSON
+record when Pi settles after one or more successful `edit` or `write` calls.
+The record lists those paths, failed commands, and whether a successful test
+finished after the final mutation.
+
+```bash
+npm run --silent dvdst -- review \
+  --input .dvdst/live/<session-id>.jsonl \
+  --watch
+```
+
+Use the record to route a changed file to a reviewer. It does not prove the
+repository diff, separate concurrent writers, or make a semantic review claim.
+Omit `--watch` to process the current file once. The watcher polls every
+1000 ms. `--interval-ms <milliseconds>` changes that interval, with a minimum
+of 100 ms. The input file must already exist and records must end in a newline.
+
+Frames carry `kind: "review-ready"`, `confidence: "inferred"`, `sessionId`,
+`settledAt`, `mutations`, `validation`, `evidence`, and `limit`. Mutation entries
+retain tool-call and source/result event IDs. `validation.commandsFailed`
+lists observed bash failures. `validation.testsAfterFinalMutation` is `passed`
+when a successful recognized test completed after the final mutation, or
+`not-observed` otherwise. A passing test does not prove coverage or erase
+other command failures. Bash file mutations are not included.
+
+The watcher rereads the file on each poll and processes bytes after its
+in-memory offset. It buffers incomplete lines and stops if the input shrinks.
+Restarting the command replays the file from the beginning, so downstream
+consumers must handle repeated frames. Replacements of equal or greater size
+are not detected by the size check. Keep the source append-only.
 
 ## Stage a session's changes
 

@@ -74,6 +74,22 @@ commits, and unresolved work. A summary of a 687 KB session is about 1.6 KB,
 with source-line references for every claim. A maintainer verifies claims
 without rereading the transcript.
 
+### Watch a live session for review
+
+Start Pi with the observe-only extension, then watch its event stream in
+another terminal:
+
+```bash
+pi -e ./examples/pi-extension/dvdst-live.ts
+npm run --silent dvdst -- review --input .dvdst/live/<session-id>.jsonl --watch
+```
+
+When Pi settles after successful `edit` or `write` calls, `review` emits a
+JSONL frame with the changed paths, failed commands, and whether a successful
+test finished after the last mutation. These inferred frames help route work
+to a reviewer. See [live streams](docs/live-streams.md#review-frames) for the
+evidence limits and watcher behavior.
+
 ### Run the benchmark or ingest the corpus
 
 ```bash
@@ -188,6 +204,8 @@ compatibility policy, and release checks in `docs/release.md`.
 - `docs/session-ingestion.md` - the store, change detection, and failure safety.
 - `docs/evidence-model.md` - the storage and provenance model.
 - `docs/live-streams.md` - the live event contract and Pi extension adapter.
+- `docs/session-staging.md` - Claude Code and Codex staging, pagination, and post-commit cursors.
+- `docs/stage-manifests.md` - HEAD-pinned selection across sessions.
 - `docs/cp0-benchmark.md` and `docs/benchmark-report.md` - product proof results.
 - `docs/project-plan.md` - scope, checkpoints, and completion criteria.
 - `docs/release.md` - corpus hardening, compatibility, and release checks.

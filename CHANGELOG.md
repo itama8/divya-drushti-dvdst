@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `dvdst review --input <events.jsonl> [--watch]` emits inferred review frames
+  when Pi settles after successful edits or writes. Frames list mutation
+  evidence, failed commands, and successful tests after the final mutation.
+  The Pi extension records agent start and settled events and shows recording
+  status in Pi.
+- `dvdst session-stage --agent claude|codex` discovers verified session
+  evidence, lists mutation selectors, and stages exact recorded changes.
+  Codex loading joins verified same-session paginated rollouts and supports
+  sequential literal patch batches. `--after` selects mutations after an
+  explicit committed-result cursor. See [session staging](docs/session-staging.md).
 - `dvdst overview`, `turns`, `calls`, and `context` read session files directly
   and write JSONL rows: per-session totals, tokens and cost per model request,
   tool calls joined to their results with duration and truncation, and system

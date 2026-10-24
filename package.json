@@ -17,6 +17,7 @@
   "scripts": {
     "probe": "tsx src/cli/probe.ts",
     "live": "tsx src/cli/live.ts",
+    "review": "tsx src/cli/review.ts",
     "export": "tsx src/cli/export.ts",
     "ingest": "tsx src/cli/ingest.ts",
     "normalize": "tsx src/cli/normalize.ts",
