@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Document source support by workflow and inventory CLI, library, extractor,
+  skill, and Omakase extension interfaces. Claude Code analysis and Codex
+  staging are distinguished from the Pi-only store and bundled live adapter.
 - `dvdst review --input <events.jsonl> [--watch]` emits inferred review frames
   when Pi settles after successful edits or writes. Frames list mutation
   evidence, failed commands, and successful tests after the final mutation.

@@ -2,34 +2,54 @@
 
 `dvdst` turns coding-agent sessions into structured development evidence.
 
-A coding session is a long JSONL transcript. To answer "which files changed,
-which commands failed, which skills ran", you first read the whole session
-back into context. dvdst ingests the session once. After that, you and
-other agents query narrow, verifiable facts without rereading it.
+Use it to inspect session activity, compare tool use and token consumption,
+prepare handoffs, and stage exact recorded edits in shared Git worktrees.
+Support depends on the workflow:
+
+| Workflow | Pi | Claude Code | Codex |
+| --- | --- | --- | --- |
+| Session analysis: `overview`, `turns`, `calls`, `context` | Supported | Supported, with missing source fields | Not implemented |
+| Direct inspection and closeout: `files`, `commands`, `skills`, `trace`, `probe`, `handoff`, `handoff-devlog` | Supported | Supported through transcript conversion | Not implemented |
+| Session-based Git staging | Supported | Supported | Supported for recorded patch formats |
+| Stored session pipeline: `ingest`, `normalize`, `artifacts`, `events` | Supported | Not implemented | Not implemented |
+| Bundled live recorder and settled review frames | Pi extension | No bundled adapter | No bundled adapter |
+
+Claude Code does not record every Pi field. Cost and model generation timing
+remain null where absent, and its `context` stream has no system prompt rows.
+Codex support currently covers staging, including verified paginated rollouts.
+It does not extend to the analysis commands or handoffs.
 
 ## What dvdst does
 
-dvdst copies a Pi session into a local evidence store, then derives streams
-from it:
+**Analyze sessions without reading the whole transcript.** Query session,
+model-request, tool-call, and context rows as JSONL, JSON, or TSV. Find failed
+commands, repeated reads, retry runs, large tool results, file activity, token
+use, and recorded cost. Pi and Claude Code use the same row interface.
+Project extractors and a TypeScript library support custom queries.
 
-- messages, tool calls, and tool results, each with line-level provenance
-- file reads and mutations, with observed versus reconstructed patches
-- shell commands and their outcomes, classified by command type
-- skill invocations and the records a skill may have influenced
-- deterministic events: command success, command failure, file activity
-- findings: a file changed without a prior read, final changes never re-run
-  through tests, command failures never retried to success
-- a compact handoff summary for closeout, without generating prose
-
-The pipeline is one command:
+**Prepare evidence and handoffs.** Direct commands summarize files, commands,
+skill loads, goals, and recorded commits for Pi and Claude Code. The separate
+Pi store pipeline preserves content-addressed snapshots with provenance and
+derives deterministic events and findings:
 
 ```text
 ingest -> normalize -> artifacts -> skills -> events -> handoff
 ```
 
-Every step is deterministic, local, and dependency-free. It makes no model
-calls and no network requests. Re-running an extractor writes byte-identical
-output and never changes the raw snapshot it copied.
+**Stage supported session edits.** Pi edits/writes, Claude Code Edit/Write
+calls, and supported Codex `apply_patch` calls replay from HEAD into the Git
+index. Explicit manifests select dependent changes across sessions. Staging
+preserves unrelated unstaged work, refuses unrelated staged changes, and never
+commits. Shell-written changes need independently reviewed Git staging.
+
+**Observe Pi live activity.** The bundled Pi extension records lifecycle and
+tool events. `live` derives observed evidence, and `review --watch` emits
+inferred review frames after completed edits and a settled agent. A frame
+routes evidence to a reviewer and does not perform code review itself.
+
+The core runs locally with no model calls or network requests. Derived output
+states its evidence and limits. See [capabilities and interfaces](docs/interfaces.md)
+for command families, Omakase adapters, extension status, and unsupported paths.
 
 ## Install and try it
 
@@ -39,15 +59,18 @@ npm test
 ```
 
 Node 22 or newer. The examples in this readme use the Omakase session corpus,
-but the commands work on any Pi session file.
+but the supported analysis commands also accept Claude Code transcripts.
+Use the support table above to choose a workflow for each agent.
 
 ```bash
-npm run --silent dvdst -- events /path/to/session.jsonl --store .dvdst/store
+npm run --silent dvdst -- overview /path/to/pi-or-claude-session.jsonl
+npm run --silent dvdst -- calls /path/to/pi-or-claude-session.jsonl --errors
 ```
 
-This one command ingests, normalizes, extracts artifacts, and derives events.
-To read store-generated streams later, use the store forms of the commands,
-which accept `--store` and `--session` (see `docs/usage.md`).
+These analysis commands read session files directly without an ingest step.
+For the Pi-only stored pipeline, `dvdst events /path/to/pi-session.jsonl
+--store .dvdst/store` ingests, normalizes, extracts artifacts, and derives
+events. Store forms accept `--store` and `--session` (see `docs/usage.md`).
 
 ## Use dvdst as a human
 
@@ -196,6 +219,7 @@ compatibility policy, and release checks in `docs/release.md`.
 
 ## Documentation
 
+- [Capabilities and interfaces](docs/interfaces.md) - source support, commands, library, and Omakase integrations.
 - `docs/usage.md` - command reference with real Omakase paths.
 - `docs/extractors.md` - project extractors and the script library.
 - `docs/events.md` - event and finding schema, and per-finding jq recipes.
