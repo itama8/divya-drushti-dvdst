@@ -1,9 +1,67 @@
 # divya-drushti (`dvdst`)
 
-`dvdst` is a local evidence tool for coding agents: Pi, Claude Code, and Codex.
-Query structured rows instead of spending context parsing entire transcripts.
+Give your coding agent a way to look back at its work.
 
-## Agent quick start
+## What DVDST does
+
+DVDST helps your agent make sense of coding sessions from **Pi, Claude Code,
+and Codex**. It turns long session logs into focused answers about what the
+agent did, what commands returned, and where time and context went.
+
+With it, you can ask your agent to:
+
+- **Pick up earlier work.** “What were we doing, which files were involved,
+  and where should we continue?” Your agent can prepare a compact handoff
+  instead of bringing the whole conversation into its context.
+- **Find wasted effort.** “Why did this take so long?” It can look for repeated
+  file reads, command retries, large tool outputs, and token use across sessions.
+- **Explain what happened.** “What commands did we run, which failed, and what
+  did we test?” It can inspect recorded results and point back to the session
+  lines behind its answer.
+- **Prepare a focused commit.** “Stage these edits without sweeping in the other
+  agent's work.” For supported edit formats, DVDST can replay selected changes
+  into Git's staging area while leaving unrelated unstaged work alone. Your
+  agent still reviews the diff and handles the commit.
+
+You stay in the conversation with your agent. It uses DVDST to fetch the
+relevant evidence, brings back a smaller answer, and continues working.
+Session analysis runs locally on your existing logs.
+
+## Give the link to your agent
+
+Copy this into Pi, Claude Code, or Codex:
+
+> Read https://github.com/itama8/divya-drushti-dvdst and set up DVDST for this
+> project. Use its agent guide to find our recent coding sessions, then tell
+> me what we worked on and which recorded commands failed. Show the sources
+> behind your answer.
+
+After that, ask things like “help me hand this work to a fresh agent” or
+“look across our recent sessions for repeated work.” The agent can use the
+same tool as part of its normal coding workflow.
+
+## Experimental, and already useful
+
+I use DVDST with my own agents, and I'm sharing it while it is still evolving.
+In my projects, agents have used it to investigate context and tool use across
+30 sessions, prepare compact handoffs for release audits, and select edits
+from several sessions in shared worktrees. Project-specific review workflows
+have also used its evidence to give a second agent context for a review.
+
+The query and staging tools are included here; the project-specific reviewer
+orchestration lives in those projects. Support varies by agent and workflow;
+the details are below. Recorded evidence still needs interpretation, especially
+around incomplete sessions.
+
+Next up:
+
+- [ ] Make handoffs distinguish successful, failed, and unfinished work more clearly.
+- [ ] Keep stored snapshots consistent when a session is still being written.
+- [ ] Make setup and release checks easier to repeat on a fresh machine.
+
+---
+
+## For agents: setup and first query
 
 Read [the agent guide](docs/agents.md) for session selection, command recipes,
 JSON output, troubleshooting, and evidence limits. Agents opening this checkout
@@ -41,9 +99,9 @@ concurrent session.
 
 ## Source coverage
 
-Use it to inspect session activity, compare tool use and token consumption,
-prepare handoffs, and stage exact recorded edits in shared Git worktrees.
-Support depends on the workflow:
+All three agents support analysis, inspection, handoffs, stored evidence, and
+supported session edits. Live recording and settled review frames currently
+come from the Pi extension:
 
 | Workflow | Pi | Claude Code | Codex |
 | --- | --- | --- | --- |
@@ -60,39 +118,7 @@ Codex also supports analysis, inspection, handoffs, and stored findings. Its
 attached once, with cost and request start times left null. Analysis reads the
 supplied rollout segment; verified pagination joining remains staging-only.
 
-## What dvdst does
-
-**Analyze sessions without reading the whole transcript.** Query session,
-model-request, tool-call, and context rows as JSONL, JSON, or TSV. Find failed
-commands, repeated reads, retry runs, large tool results, file activity, token
-use, and recorded cost. Pi, Claude Code, and Codex use the same row interface.
-Project extractors and a TypeScript library support custom queries.
-
-**Prepare evidence and handoffs.** Direct commands summarize files, commands,
-skill loads, goals, and recorded commits for all three agents. The
-store pipeline preserves content-addressed snapshots with provenance and
-derives deterministic events and findings:
-
-```text
-ingest -> normalize -> artifacts -> skills -> events -> handoff
-```
-
-**Stage supported session edits.** Pi edits/writes, Claude Code Edit/Write
-calls, and supported Codex `apply_patch` calls replay from HEAD into the Git
-index. Explicit manifests select dependent changes across sessions. Staging
-preserves unrelated unstaged work, refuses unrelated staged changes, and never
-commits. Shell-written changes need independently reviewed Git staging.
-
-**Observe Pi live activity.** The bundled Pi extension records lifecycle and
-tool events. `live` derives observed evidence, and `review --watch` emits
-inferred review frames after completed edits and a settled agent. A frame
-routes evidence to a reviewer and does not perform code review itself.
-
-The core runs locally with no model calls or network requests. Derived output
-states its evidence and limits. See [capabilities and interfaces](docs/interfaces.md)
-for command families, Omakase adapters, extension status, and unsupported paths.
-
-## Use dvdst as an agent
+## For agents: queries and skills
 
 ### Query sessions as rows
 
@@ -182,31 +208,6 @@ attributed tool use, validation, failures, and per-session outcomes. Each
 recipe's output is asserted by a test, so the recipes do not drift from the
 extractors.
 
-## Use dvdst as a human
-
-### Investigate one session
-
-These examples use `$SESSION` as the path to a session file.
-
-```bash
-npm run dvdst -- files    "$SESSION"                     # what was read and mutated
-npm run dvdst -- commands "$SESSION" --class test        # test commands only
-npm run dvdst -- skills   "$SESSION"                     # skill invocations and span lines
-npm run dvdst -- trace    "$SESSION" --id <record-id>    # provenance of one record
-```
-
-### Close out a session
-
-```bash
-npm run dvdst -- handoff "$SESSION" --devlog .devlog/2026-08-04.md
-npm run dvdst -- handoff-devlog "$SESSION" --out draft.md --project omakase-v2
-```
-
-The handoff summary reports goals, touched files, commands, tests, skills,
-commits, and unresolved work. A summary of a 687 KB session is about 1.6 KB,
-with source-line references for every claim. A maintainer verifies claims
-without rereading the transcript.
-
 ### Watch a live session for review
 
 Start Pi with the observe-only extension, then watch its event stream in
@@ -223,28 +224,6 @@ test finished after the last mutation. These inferred frames help route work
 to a reviewer. See [live streams](docs/live-streams.md#review-frames) for the
 evidence limits and watcher behavior.
 
-### Run the benchmark or ingest the corpus
-
-```bash
-node --import tsx scripts/run-benchmark.mjs
-npm run corpus -- ~/.pi/agent/sessions/--home-a2ajinkya-Projects-omakase-v2-- \
-  --store .dvdst/store-corpus
-npm run dvdst -- cleanup --store .dvdst/store --yes
-```
-
-The benchmark runs ten real Omakase sessions and writes the report. The corpus
-command ingests every session under a root, read-only. Cleanup removes the
-local store. It never touches the Pi sessions.
-
-## Status
-
-Release `0.1.0`. The ten-case benchmark matches every devlog status, and the
-compact summary reduces source to about 1/100 to 1/1000 of its size. Corpus
-ingestion covers 396 Omakase sessions with zero parse diagnostics.
-
-Read the full release notes in `CHANGELOG.md` and the hardening details,
-compatibility policy, and release checks in `docs/release.md`.
-
 ## Documentation
 
 - [Agent guide](docs/agents.md) - setup, session selection, machine-readable workflows, and limits.
@@ -259,6 +238,13 @@ compatibility policy, and release checks in `docs/release.md`.
 - `docs/live-streams.md` - the live event contract and Pi extension adapter.
 - `docs/session-staging.md` - Claude Code and Codex staging, pagination, and post-commit cursors.
 - `docs/stage-manifests.md` - HEAD-pinned selection across sessions.
-- `docs/cp0-benchmark.md` and `docs/benchmark-report.md` - product proof results.
+- `docs/cp0-benchmark.md` and `docs/benchmark-report.md` - historical Pi benchmark results.
 - `docs/project-plan.md` - scope, checkpoints, and completion criteria.
 - `docs/release.md` - corpus hardening, compatibility, and release checks.
+
+---
+
+**दिव्यदृष्टी · Divya Drushti**
+
+*Marathi, noun.* “Divine vision”: the ability to perceive what is beyond ordinary
+sight; clairvoyance. ([Marathi dictionary](https://www.transliteral.org/dictionary/दिव्यदृष्टी/word))
