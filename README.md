@@ -18,14 +18,15 @@ With it, you can ask your agent to:
 - **Explain what happened.** “What commands did we run, which failed, and what
   did we test?” It can inspect recorded results and point back to the session
   lines behind its answer.
-- **Prepare a focused commit.** “Stage these edits without sweeping in the other
-  agent's work.” For supported edit formats, DVDST can replay selected changes
-  into Git's staging area while leaving unrelated unstaged work alone. Your
-  agent still reviews the diff and handles the commit.
 
 You stay in the conversation with your agent. It uses DVDST to fetch the
 relevant evidence, brings back a smaller answer, and continues working.
 Session analysis runs locally on your existing logs.
+
+Staging is optional, for when you explicitly ask your agent to prepare changes
+for a commit. For supported edit formats, DVDST can stage selected edits while
+leaving unrelated unstaged work alone. Your agent still reviews the diff and
+handles the commit.
 
 ## Give the link to your agent
 
@@ -62,6 +63,11 @@ Next up:
 - [ ] Make handoffs distinguish successful, failed, and unfinished work more clearly.
 - [ ] Keep stored snapshots consistent when a session is still being written.
 - [ ] Make setup and release checks easier to repeat on a fresh machine.
+
+**Privacy:** DVDST processes session logs locally and does not upload them.
+When your agent reads the resulting evidence, that content may be sent to its
+model provider under your agent's settings. Session logs can contain code,
+commands, and other project information.
 
 ---
 
