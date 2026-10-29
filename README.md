@@ -23,10 +23,10 @@ You stay in the conversation with your agent. It uses DVDST to fetch the
 relevant evidence, brings back a smaller answer, and continues working.
 Session analysis runs locally on your existing logs.
 
-Staging is optional, for when you explicitly ask your agent to prepare changes
-for a commit. For supported edit formats, DVDST can stage selected edits while
-leaving unrelated unstaged work alone. Your agent still reviews the diff and
-handles the commit.
+**Prepare a focused commit.** *Optional—when you ask for it.* “Stage these edits
+without sweeping in the other agent's work.” For supported edit formats, DVDST
+can replay selected changes into Git's staging area while leaving unrelated
+unstaged work alone. Your agent still reviews the diff and handles the commit.
 
 ## Give the link to your agent
 
