@@ -42,8 +42,8 @@ same tool as part of its normal coding workflow.
 
 ## Experimental, and already useful
 
-I use DVDST with my own agents, and I'm sharing it while it is still evolving.
-In my projects, agents have used it to investigate context and tool use across
+We use DVDST in our own work, and we're sharing it while it is still evolving.
+Across our projects, we've used it to investigate context and tool use across
 30 sessions, prepare compact handoffs for release audits, and select edits
 from several sessions in shared worktrees. Project-specific review workflows
 have also used its evidence to give a second agent context for a review.
