@@ -254,7 +254,7 @@ evidence limits and watcher behavior.
 
 ---
 
-**दिव्यदृष्टी · Divya Drushti**
+**दिव्य-दृष्टी · Divya Drushti**
 
-*Marathi, noun.* “Divine vision”: the ability to perceive what is beyond ordinary
+“Divine vision”: the ability to perceive what is beyond ordinary
 sight; clairvoyance. ([Marathi dictionary](https://www.transliteral.org/dictionary/दिव्यदृष्टी/word))
