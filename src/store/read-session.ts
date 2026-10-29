@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { isObject } from "../pi/read-jsonl.js";
 import { sourceSegment } from "./fs-util.js";
@@ -20,7 +20,15 @@ export async function readSessionSnapshot(options: {
   sourceHash?: string;
 }): Promise<SessionSnapshot> {
   const store = resolve(options.store);
-  const sessionDirectory = join(store, "sessions", "pi", sourceSegment(options.sessionId));
+  if (options.sourceHash !== undefined && !SHA256_RE.test(options.sourceHash)) throw new Error("sourceHash must be a SHA-256 hex digest");
+  const directories = ["pi", "claude", "codex"].map(agent => join(store, "sessions", agent, sourceSegment(options.sessionId)));
+  const matches: string[] = [];
+  for (const directory of directories) {
+    const target = options.sourceHash === undefined ? join(directory, "latest.json") : join(directory, "snapshots", options.sourceHash, "manifest.json");
+    if (await access(target).then(() => true, () => false)) matches.push(directory);
+  }
+  if (matches.length > 1) throw new Error(`Ambiguous session identity across agents: ${options.sessionId}`);
+  const sessionDirectory = matches[0] ?? directories[0]!;
   let sourceHash = options.sourceHash;
   if (sourceHash === undefined) {
     let latest: unknown;

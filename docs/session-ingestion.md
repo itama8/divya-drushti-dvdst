@@ -2,9 +2,9 @@
 
 ## Goal
 
-`dvdst ingest` preserves Pi session files in the local evidence store before any normalization runs. A snapshot keeps the raw source, a source-state summary, and a manifest. Repeated unchanged ingestion performs no writes.
+`dvdst ingest` preserves Pi, Claude Code, and Codex session files in the local evidence store before any normalization runs. A snapshot keeps the raw source, a source-state summary, and a manifest. Repeated unchanged ingestion performs no writes.
 
-This is the file-based counterpart to the live event stream in `docs/live-streams.md`. Live ingestion preserves what a Pi extension observed while the session ran. Session ingestion preserves the final Pi JSONL archive. Use the archive to audit the live stream after the session ends.
+This is the file-based counterpart to the live event stream in `docs/live-streams.md`. Live ingestion preserves what a Pi extension observed while the session ran. Session ingestion preserves the supplied JSONL archive. Use the archive to audit the live stream after the session ends.
 
 ## Run it
 
@@ -45,7 +45,7 @@ npm run --silent dvdst -- ingest \
 store/
 ├── store.json
 └── sessions/
-    └── pi/<session-id>/
+    └── <pi|claude|codex>/<session-id>/
         ├── latest.json
         └── snapshots/<sha256>/
             ├── manifest.json
@@ -59,11 +59,11 @@ The snapshot name is the SHA-256 of the whole source file. Equal content always 
 Read the latest snapshot back without reopening the source file:
 
 ```bash
-npm run --silent dvdst -- timeline \
-  --store .dvdst/store --source pi.extension --session <session-id>
+npm run --silent dvdst -- normalize \
+  --store .dvdst/store --session <session-id>
 ```
 
-Session snapshots share the store layout with live snapshots. The session directory differs by adapter segment: `sessions/pi/<session-id>/` for files versus `sessions/live/<source>/<session-id>/` for live streams.
+Session snapshots share the store layout with live snapshots. The session directory differs by adapter segment: `sessions/<pi|claude|codex>/<session-id>/` for files versus `sessions/live/<source>/<session-id>/` for live streams.
 
 ## Change classes
 
@@ -190,3 +190,19 @@ npm run --silent dvdst -- commands --store .dvdst/store --session <session-id> -
 ## Limits
 
 Ingestion itself preserves source only. Normalization is a separate, repeatable step that reads the preserved snapshot. It does not yet classify commands, extract file artifacts, or attribute skill spans; those extractors run later and read the same records and blobs. It also does not compute branch depth or selected-branch views; parent links and append order are preserved so a consumer can reconstruct ancestry without replaying the raw file.
+## Claude Code and Codex
+
+Pass their transcript paths to `ingest`, `normalize`, `artifacts`, or `events`:
+
+```bash
+dvdst events /path/to/claude-transcript.jsonl --store .dvdst/store
+dvdst events /path/to/codex-rollout.jsonl --store .dvdst/store
+```
+
+The manifest records the detected adapter. Raw files stay unchanged; normalization
+converts supported records to the common message/tool schema while preserving
+line and byte references. Store readers refuse session IDs present in more than
+one agent namespace. Codex analysis and ingestion cover the supplied segment,
+not joined paginated history. See [source limits](interfaces.md#session-analysis).
+The `pi-normalize`, `pi-artifacts`, and `pi-events` extractor names are retained
+for store compatibility; the manifest adapter identifies the source agent.

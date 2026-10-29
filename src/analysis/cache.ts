@@ -8,7 +8,7 @@ import { writeAtomic } from "../store/fs-util.js";
 import type { SessionRows } from "./rows.js";
 
 /** Source files whose logic decides the rows. A change to any of them makes cached rows stale. */
-const ROW_LOGIC = ["rows.ts", "../pi/bash-effects.ts", "../pi/classify-commands.ts", "../sources/claude.ts", "../sources/read-session.ts"];
+const ROW_LOGIC = ["rows.ts", "../pi/bash-effects.ts", "../pi/classify-commands.ts", "../sources/claude.ts", "../sources/codex.ts", "../stage/codex-exec.ts", "../sources/read-session.ts"];
 
 export function cacheDirectory(env: Record<string, string | undefined> = process.env): string | undefined {
   if (env.DVDST_CACHE === "off" || env.DVDST_CACHE === "0") return undefined;

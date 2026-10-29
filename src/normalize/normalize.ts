@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { isObject, readJsonl, type SourceReference } from "../pi/read-jsonl.js";
+import { isObject, type SourceReference } from "../pi/read-jsonl.js";
+import { readSessionRecords } from "../sources/read-session.js";
 import { exists, writeAtomic } from "../store/fs-util.js";
 import { readSessionSnapshot } from "../store/read-session.js";
 
@@ -167,7 +168,7 @@ export async function normalizeSnapshot(options: {
 }): Promise<NormalizeResult> {
   const store = resolve(options.store);
   const snapshotInfo = await readSessionSnapshot(options);
-  const sourceRecords = await readJsonl(snapshotInfo.rawPath);
+  const { records: sourceRecords } = await readSessionRecords(snapshotInfo.rawPath);
   const writer = makeBlobWriter(join(store, "blobs", "sha256"));
 
   const entries: unknown[] = [];

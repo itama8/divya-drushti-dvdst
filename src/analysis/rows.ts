@@ -34,7 +34,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
     description: "One row per session: size, time, tokens, cost, and tool totals.",
     fields: [
       SESSION_FIELD,
-      field("source", "string", "Agent that wrote the session: pi or claude."),
+      field("source", "string", "Agent that wrote the session: pi, claude, or codex."),
       field("path", "string", "Session file the row was read from."),
       field("cwd", "string|null", "Working directory recorded in the session header."),
       field("startedAt", "string|null", "Timestamp of the session header."),
@@ -44,7 +44,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("models", "string[]", "Distinct models that produced an assistant message, in first-use order."),
       field("firstPrompt", "string", "First 200 characters of the first user message, with whitespace collapsed."),
       field("userTurns", "number", "User messages."),
-      field("turns", "number", "Assistant messages. Each one is one model request."),
+      field("turns", "number", "Canonical assistant messages. Codex rows represent response items, not guaranteed provider requests."),
       field("calls", "number", "Tool calls."),
       field("errorCalls", "number", "Tool calls whose result reported an error."),
       field("truncatedCalls", "number", "Tool calls whose result the agent cut at its output limit."),
@@ -53,7 +53,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("maxFailureRun", "number", "Longest run of consecutive failed tool calls."),
       field("inlineScriptCalls", "number", "Bash calls that ran a script typed into the command, such as node -e or a python heredoc."),
       field("tools", "object", "Tool call count by tool name."),
-      field("callsBeforeFirstMutation", "number|null", "Tool calls before the first edit or write. Bash mutations do not count. Null when the session never edited or wrote a file."),
+      field("callsBeforeFirstMutation", "number|null", "Tool calls before the first edit, write, or apply_patch call. Bash mutations do not count. Null when no such call is recorded."),
       field("inputTokens", "number", "Sum of uncached input tokens over all turns."),
       field("outputTokens", "number", "Sum of output tokens over all turns."),
       field("cacheReadTokens", "number", "Sum of cache-read tokens over all turns."),
@@ -66,13 +66,13 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
     ],
   },
   turns: {
-    description: "One row per assistant message, which is one model request: model, tokens, cost, and timing.",
+    description: "One row per canonical assistant message: model, tokens, cost, and timing. Codex uses recorded response items.",
     fields: [
       SESSION_FIELD,
       field("turn", "number", "1-based index of the assistant message in the session. calls.turn joins to it."),
       field("line", "number", "Line of the assistant message in the session file."),
       field("userTurn", "number", "Count of user messages so far. All turns that answer one prompt share it."),
-      field("startedAt", "string|null", "When the agent started the request. Null for Claude Code, which does not record it."),
+      field("startedAt", "string|null", "When the agent started the request. Null for Claude Code and Codex, which do not record it."),
       field("endedAt", "string|null", "When the finished message was appended. For Claude Code, when its last block arrived."),
       field("generationMs", "number|null", "endedAt minus startedAt."),
       field("model", "string|null", "Model id."),
@@ -319,7 +319,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
           verbs: bash.verbs,
           classes: command === null ? [] : classifyCommand(command, commandClasses),
           reads: command !== null ? bashPaths("read") : block.name === "read" && path !== null ? [path] : [],
-          mutates: command !== null ? bashPaths("mutation") : MUTATING_TOOLS.has(block.name as string) && path !== null ? [path] : [],
+          mutates: command !== null ? bashPaths("mutation") : MUTATING_TOOLS.has(block.name as string) && path !== null ? [path] : block.name === "apply_patch" && Array.isArray(args.paths) ? args.paths.filter((p): p is string => typeof p === "string").map(p => relativeToCwd(p, cwd)) : [],
           opaque: bash.opaque,
           rereads: [],
           commandAttempt: null,
@@ -359,7 +359,8 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
       call.endedAt = finishedAt;
       call.durationMs = elapsed(call.startedAt as string | null, finishedAt);
       call.isError = message.isError === true;
-      call.exitCode = exit === null ? null : Number(exit[1] ?? exit[2]);
+      const details = isObject(message.details) ? message.details : {};
+      call.exitCode = typeof details.exitCode === "number" ? details.exitCode : exit === null ? null : Number(exit[1] ?? exit[2]);
       call.resultBytes = bytes(text);
       call.resultLines = text.length === 0 ? 0 : text.split("\n").length;
       call.truncated = TRUNCATION_MARKER.test(text);
@@ -394,7 +395,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
 
   const tools: Record<string, number> = {};
   for (const call of calls) tools[call.tool as string] = (tools[call.tool as string] ?? 0) + 1;
-  const firstMutation = calls.findIndex((call) => MUTATING_TOOLS.has(call.tool as string));
+  const firstMutation = calls.findIndex((call) => MUTATING_TOOLS.has(call.tool as string) || call.tool === "apply_patch");
   const sum = (rows: Row[], key: string): number => rows.reduce((total, row) => total + numberOrZero(row[key]), 0);
 
   const overview: Row = {

@@ -6,7 +6,7 @@ that repository. Installing dvdst alone does not install those adapters.
 
 ## Session analysis
 
-Pi and Claude Code transcripts feed a common row interface:
+Pi, Claude Code, and Codex transcripts feed a common row interface:
 
 - `overview`: session totals, models, tokens, recorded cost, and tool use
 - `turns`: model requests, tokens, context use, and recorded timing
@@ -24,18 +24,32 @@ dvdst schema calls
 
 Rows support JSONL, JSON, and TSV. `--full` includes arguments and result text.
 Session selection accepts files, IDs, prefixes, and `latest`, with project,
-root, time, and count filters. `--source all` means Pi and Claude Code.
+root, time, and count filters. `--source all` means Pi, Claude Code, and Codex.
 The default source for recent-session selection is Pi.
 
 Claude conversion normalizes core tools to `bash`, `read`, `edit`, and `write`.
 It excludes sidechain entries. Missing cost and generation timing stay null,
-and there are no Claude system prompt rows. Codex rollouts do not feed these
-analysis commands, including when passed as an explicit path.
+and there are no Claude system prompt rows. Codex rollouts feed the same commands. `--source codex` discovers rollouts
+under `$CODEX_HOME/sessions` (default `~/.codex/sessions`), using recorded cwd
+for project selection. Codex context exposes recorded base instructions only.
+Its turns are assistant response items, rather than a guaranteed count of
+provider requests. `last_token_usage` is attached once to the preceding
+assistant item; cached input is separated from uncached input. Missing cost
+and request start times remain null. Event echoes do not count as prompts.
+
+Native shell calls and literal `functions.exec` batches with a complete,
+unambiguous result list become command rows. Complex scripts stay opaque
+`exec` calls. Running native shell calls stay unfinished until a recorded
+`write_stdin` result supplies an exit status. Patch paths describe recorded
+intent, including multi-file patches; they do not establish exact diffs.
+Analysis and ingestion read the supplied file segment only. They do not join
+paginated history or reconstruct fork ancestry; staging retains its stricter
+verified pagination loader.
 
 ## Inspection and handoff
 
 `files`, `commands`, `skills`, `trace`, `probe`, `handoff`, and `handoff-devlog`
-read Pi or Claude Code session evidence. They expose file operations, command
+read Pi, Claude Code, or Codex session evidence. They expose file operations, command
 outcomes, skill loads and attribution, provenance, goals, recorded commits,
 and compact closeout summaries or devlog drafts. Skill attribution is an
 evidence-based association and does not prove model adherence.
@@ -46,8 +60,7 @@ dvdst handoff /path/to/claude-transcript.jsonl
 ```
 
 These commands use a direct bundle path. Their file summaries do not include
-all inferred bash reads available in call rows and stored artifacts. Codex
-inspection and handoffs are not implemented.
+all inferred bash reads available in call rows and stored artifacts. Codex patch paths are included in direct file summaries.
 
 ## Recorded-change staging
 
@@ -83,11 +96,16 @@ intended changes. See [session staging](session-staging.md) and
 
 ## Stored evidence and live streams
 
-The stored session pipeline is Pi-only: `ingest`, `normalize`, `artifacts`,
+The stored session pipeline supports Pi, Claude Code, and Codex: `ingest`, `normalize`, `artifacts`,
 and `events` preserve raw snapshots and derive records, artifact streams, and
-findings. Findings include file modification without a prior observed read,
+findings. Raw snapshots stay verbatim in separate `sessions/pi`,
+`sessions/claude`, and `sessions/codex` namespaces. Store readers resolve a
+unique session ID across those namespaces and refuse ambiguous identities.
+Canonical conversion preserves source line and byte references; unsupported
+tools remain generic records. Findings include file modification without a prior observed read,
 tests missing after the final mutation, and unresolved command failures.
-`sessions` discovers Pi session files. `cleanup` removes a marked local store.
+`sessions` remains a Pi filename discovery command; use analysis selection
+with `--source` for cross-agent discovery. `cleanup` removes a marked local store.
 
 The live event contract takes producer-supplied events. The bundled recorder,
 `examples/pi-extension/dvdst-live.ts`, targets Pi. There is no bundled Claude
@@ -110,7 +128,7 @@ changes. See [live streams](live-streams.md).
 - Project extractors: `.dvdst/extractors/` modules with `derive(session)` and
   optional `summarize(rows)`, run as `dvdst <name>` or `dvdst rows <name|file>`
 - Project rules: `.dvdst/config.json` for command classes and finding exclusions
-- Agent skill: `skills/dvdst-session-analysis/` for Pi and Claude Code analysis
+- Agent skill: `skills/dvdst-session-analysis/` for Pi, Claude Code, and Codex analysis
 - Files and pipes: JSONL records, canonical store files, and CLI JSON/TSV output
 
 There is no dvdst MCP server, HTTP service, dashboard, or automatic Git commit

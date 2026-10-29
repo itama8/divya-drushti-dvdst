@@ -31,10 +31,10 @@ fields:
 | field | content |
 | --- | --- |
 | `session`, `path`, `cwd` | session id, session file, and recorded working directory |
-| `source` | the agent that wrote the session: `pi` or `claude` |
+| `source` | the agent that wrote the session: `pi`, `claude`, or `codex` |
 | `overview` | the session's `overview` row |
 | `turns`, `calls`, `context` | the row streams, with the `--full` fields: call arguments and result text, and section text |
-| `records` | every entry, with its line and byte range; a Claude Code session is converted to the Pi entry shape |
+| `records` | every entry, with its line and byte range; Claude Code and Codex sessions are converted to the Pi entry shape |
 | `config` | the project rules that classified the commands |
 
 `dvdst schema calls` prints the fields of each row. Use `records` when the rows

@@ -317,8 +317,20 @@ describe("the agent skill", () => {
     assert.ok(commands.size >= 6);
     for (const command of commands) assert.match(help, new RegExp(`^  ${command}\\s`, "m"), `dvdst ${command} is not a command`);
 
-    const usage = spawnSync(process.execPath, [...DISPATCHER, "calls", "--help"], { encoding: "utf8" }).stderr;
-    for (const flag of new Set(skill.match(/(?<![-\w])--[a-z][a-z-]*/g) ?? [])) assert.ok(usage.includes(flag), `${flag} is not an option of the row commands`);
+    // Validate each command's flags against its own help. Setup uses npm flags,
+    // and stored evidence commands have options that analysis does not accept.
+    const usageByCommand = new Map<string, string>();
+    for (const match of skill.matchAll(/(?:^|`)dvdst ([a-z][a-z-]*)([^`\n]*)/gm)) {
+      const command = match[1]!;
+      let usage = usageByCommand.get(command);
+      if (usage === undefined) {
+        usage = spawnSync(process.execPath, [...DISPATCHER, command, "--help"], { encoding: "utf8" }).stderr;
+        usageByCommand.set(command, usage);
+      }
+      for (const flag of new Set(match[2]!.match(/(?<![-\w])--[a-z][a-z-]*/g) ?? [])) {
+        assert.ok(usage.includes(flag), `${flag} is not an option of dvdst ${command}`);
+      }
+    }
     for (const field of ["contextTokens", "durationMs", "exitCode", "truncated", "reads", "mutates", "opaque", "firstPrompt"]) {
       assert.ok(Object.values(STREAMS).some((stream) => stream.fields.some((entry) => entry.name === field)), `${field} is not a row field`);
     }

@@ -166,7 +166,7 @@ describe("session ingestion store", () => {
     const source = join(root, "session.jsonl");
     await writeFile(source, line(modelChange) + line(userMessage));
 
-    await assert.rejects(ingestSessionFile(source, store), /no valid Pi session header/);
+    await assert.rejects(ingestSessionFile(source, store), /no valid supported session header/);
     await assert.rejects(readFile(join(store, "store.json"), "utf8"));
   });
 

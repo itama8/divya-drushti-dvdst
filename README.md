@@ -1,6 +1,45 @@
 # divya-drushti (`dvdst`)
 
-`dvdst` turns coding-agent sessions into structured development evidence.
+`dvdst` is a local evidence tool for coding agents: Pi, Claude Code, and Codex.
+Query structured rows instead of spending context parsing entire transcripts.
+
+## Agent quick start
+
+Read [the agent guide](docs/agents.md) for session selection, command recipes,
+JSON output, troubleshooting, and evidence limits. Agents opening this checkout
+can start with [AGENTS.md](AGENTS.md). The reusable
+[session-analysis skill](skills/dvdst-session-analysis/SKILL.md) works across
+all three agents.
+
+Node 22 or newer is required. For a fresh checkout:
+
+```bash
+git clone https://github.com/itama8/divya-drushti-dvdst.git dvdst
+cd dvdst
+npm ci --include=dev
+node bin/dvdst.mjs schema calls
+node bin/dvdst.mjs overview test/fixtures/claude-session.jsonl
+```
+
+Keep development dependencies installed: the CLI runs TypeScript using `tsx`.
+There is no build step, API key, model service, or ingest prerequisite for
+analysis. To query another project's sessions from this checkout:
+
+```bash
+node bin/dvdst.mjs overview --project my-project --source all --last 10
+node bin/dvdst.mjs calls /absolute/path/to/session.jsonl --errors
+node bin/dvdst.mjs handoff /absolute/path/to/session.jsonl --format json
+```
+
+Replace `my-project` and the session path with the target project and transcript.
+From another working directory, use `node /absolute/path/to/dvdst/bin/dvdst.mjs`
+with the same arguments. Optional: run `npm link` in this checkout to use `dvdst`.
+Analysis defaults to Pi; choose `--source claude`, `--source codex`, or
+`--source all` explicitly when discovering sessions. Prefer an exact transcript
+path when examining a particular running agent; `latest` can select another
+concurrent session.
+
+## Source coverage
 
 Use it to inspect session activity, compare tool use and token consumption,
 prepare handoffs, and stage exact recorded edits in shared Git worktrees.
@@ -8,28 +47,30 @@ Support depends on the workflow:
 
 | Workflow | Pi | Claude Code | Codex |
 | --- | --- | --- | --- |
-| Session analysis: `overview`, `turns`, `calls`, `context` | Supported | Supported, with missing source fields | Not implemented |
-| Direct inspection and closeout: `files`, `commands`, `skills`, `trace`, `probe`, `handoff`, `handoff-devlog` | Supported | Supported through transcript conversion | Not implemented |
+| Session analysis: `overview`, `turns`, `calls`, `context` | Supported | Supported, with missing source fields | Supported, with source limits |
+| Direct inspection and closeout: `files`, `commands`, `skills`, `trace`, `probe`, `handoff`, `handoff-devlog` | Supported | Supported through transcript conversion | Supported through rollout conversion |
 | Session-based Git staging | Supported | Supported | Supported for recorded patch formats |
-| Stored session pipeline: `ingest`, `normalize`, `artifacts`, `events` | Supported | Not implemented | Not implemented |
+| Stored session pipeline: `ingest`, `normalize`, `artifacts`, `events` | Supported | Supported | Supported |
 | Bundled live recorder and settled review frames | Pi extension | No bundled adapter | No bundled adapter |
 
 Claude Code does not record every Pi field. Cost and model generation timing
 remain null where absent, and its `context` stream has no system prompt rows.
-Codex support currently covers staging, including verified paginated rollouts.
-It does not extend to the analysis commands or handoffs.
+Codex also supports analysis, inspection, handoffs, and stored findings. Its
+`turns` represent recorded assistant response items; recorded request usage is
+attached once, with cost and request start times left null. Analysis reads the
+supplied rollout segment; verified pagination joining remains staging-only.
 
 ## What dvdst does
 
 **Analyze sessions without reading the whole transcript.** Query session,
 model-request, tool-call, and context rows as JSONL, JSON, or TSV. Find failed
 commands, repeated reads, retry runs, large tool results, file activity, token
-use, and recorded cost. Pi and Claude Code use the same row interface.
+use, and recorded cost. Pi, Claude Code, and Codex use the same row interface.
 Project extractors and a TypeScript library support custom queries.
 
 **Prepare evidence and handoffs.** Direct commands summarize files, commands,
-skill loads, goals, and recorded commits for Pi and Claude Code. The separate
-Pi store pipeline preserves content-addressed snapshots with provenance and
+skill loads, goals, and recorded commits for all three agents. The
+store pipeline preserves content-addressed snapshots with provenance and
 derives deterministic events and findings:
 
 ```text
@@ -51,26 +92,95 @@ The core runs locally with no model calls or network requests. Derived output
 states its evidence and limits. See [capabilities and interfaces](docs/interfaces.md)
 for command families, Omakase adapters, extension status, and unsupported paths.
 
-## Install and try it
+## Use dvdst as an agent
+
+### Query sessions as rows
+
+Four commands read session files directly, with no ingest step, and write
+JSONL: `overview` (one row per session), `turns` (one per canonical assistant
+message, with recorded tokens and cost), `calls` (one per tool call joined to its result), and
+`context` (one per system prompt section).
 
 ```bash
-npm install
-npm test
+dvdst overview --project omakase-v2 --last 50 | jq -s 'sort_by(-.cost)[:5]'
+dvdst calls latest --errors
+dvdst schema calls
 ```
 
-Node 22 or newer. The examples in this readme use the Omakase session corpus,
-but the supported analysis commands also accept Claude Code transcripts.
-Use the support table above to choose a workflow for each agent.
+These commands read Pi, Claude Code, and Codex sessions. Select with
+`--source pi|claude|codex|all`; the default remains Pi. For example:
 
 ```bash
-npm run --silent dvdst -- overview /path/to/pi-or-claude-session.jsonl
-npm run --silent dvdst -- calls /path/to/pi-or-claude-session.jsonl --errors
+dvdst overview --project dvdst --source all --last 20
+dvdst calls latest --source codex --errors
 ```
 
-These analysis commands read session files directly without an ingest step.
-For the Pi-only stored pipeline, `dvdst events /path/to/pi-session.jsonl
---store .dvdst/store` ingests, normalizes, extracts artifacts, and derives
-events. Store forms accept `--store` and `--session` (see `docs/usage.md`).
+A session is a file, a session id or id prefix, or `latest`. `dvdst schema`
+prints every field. To add a stream, put a file that exports
+`{ derive(session) }` in `.dvdst/extractors/`, or import `loadSessions` from
+the library; see `docs/extractors.md`. Run `npm link` once to put `dvdst` on the path. See
+section 6a of `docs/usage.md` for selection flags and recipes.
+
+### Give an agent the skill
+
+`skills/dvdst-session-analysis/` is a skill for Pi, Claude Code, and Codex. It tells an
+agent which command answers which question, how to name sessions, and what
+the rows do and do not support. Link it into the agent's skill directory:
+
+```bash
+mkdir -p ~/.pi/agent/skills ~/.claude/skills ~/.agents/skills
+ln -s "$PWD/skills/dvdst-session-analysis" ~/.pi/agent/skills/
+ln -s "$PWD/skills/dvdst-session-analysis" ~/.claude/skills/
+# Codex:
+ln -s "$PWD/skills/dvdst-session-analysis" ~/.agents/skills/
+```
+
+### Read canonical files directly
+
+The store is plain JSONL on disk. You do not need the CLI to read it. This is
+the contract:
+
+```text
+store/sessions/<pi|claude|codex>/<session-id>/snapshots/<source-hash>/
+├── source/raw.jsonl               verbatim snapshot the streams point back to
+├── records/                       entries, messages, tool calls, timeline,
+│                                  skill invocations and attributions
+├── artifacts/                     file reads, mutations, commands, tests
+└── events/deterministic.jsonl     events and findings, in source order
+```
+
+Each record carries a `confidence` value (`observed`, `reconstructed`,
+`inferred`) and a `source` reference to a line and byte range in the raw
+snapshot. No record pretends an absence is a fact, and no record pretends
+reconstruction is observation.
+
+### Pipe JSONL through stdout
+
+Commands write one JSON object per line on stdout and diagnostics on stderr.
+This makes discovery and ingestion composable:
+
+```bash
+npm run --silent dvdst -- sessions <root> --format jsonl \
+  | npm run --silent dvdst -- ingest --store .dvdst/store
+```
+
+### Join streams with jq
+
+Attributions and commands share a tool-call id. This join reports every
+command that ran inside a skill span:
+
+```bash
+jq -n --slurpfile a "$BASE/records/skill-attributions.jsonl" \
+      --slurpfile c "$BASE/artifacts/commands.jsonl" \
+ '($a[] | select(.recordKind=="tool-call")) as $at
+  | ($c[] | select(.toolCallId==$at.recordId)) as $cmd
+  | {command: $cmd.command, failed: $cmd.result.isError, skills: [$at.labels[].invocationId]}'
+```
+
+The jq cookbook in `docs/cookbook.md` covers skill versions by content hash,
+attributed tool use, validation, failures, and per-session outcomes. Each
+recipe's output is asserted by a test, so the recipes do not drift from the
+extractors.
 
 ## Use dvdst as a human
 
@@ -126,88 +236,6 @@ The benchmark runs ten real Omakase sessions and writes the report. The corpus
 command ingests every session under a root, read-only. Cleanup removes the
 local store. It never touches the Pi sessions.
 
-## Use dvdst as an agent
-
-### Query sessions as rows
-
-Four commands read session files directly, with no ingest step, and write
-JSONL: `overview` (one row per session), `turns` (one per model request, with
-tokens and cost), `calls` (one per tool call joined to its result), and
-`context` (one per system prompt section).
-
-```bash
-dvdst overview --project omakase-v2 --last 50 | jq -s 'sort_by(-.cost)[:5]'
-dvdst calls latest --errors
-dvdst schema calls
-```
-
-These commands read Pi and Claude Code sessions. `--source claude` selects
-Claude Code sessions, and a session id is found whichever agent wrote it.
-
-A session is a file, a session id or id prefix, or `latest`. `dvdst schema`
-prints every field. To add a stream, put a file that exports
-`{ derive(session) }` in `.dvdst/extractors/`, or import `loadSessions` from
-the library; see `docs/extractors.md`. Run `npm link` once to put `dvdst` on the path. See
-section 6a of `docs/usage.md` for selection flags and recipes.
-
-### Give an agent the skill
-
-`skills/dvdst-session-analysis/` is a skill for Pi and Claude Code. It tells an
-agent which command answers which question, how to name sessions, and what
-the rows do and do not support. Link it into the agent's skill directory:
-
-```bash
-ln -s "$PWD/skills/dvdst-session-analysis" ~/.pi/agent/skills/
-ln -s "$PWD/skills/dvdst-session-analysis" ~/.claude/skills/
-```
-
-### Read canonical files directly
-
-The store is plain JSONL on disk. You do not need the CLI to read it. This is
-the contract:
-
-```text
-store/sessions/pi/<session-id>/snapshots/<source-hash>/
-├── source/raw.jsonl               verbatim snapshot the streams point back to
-├── records/                       entries, messages, tool calls, timeline,
-│                                  skill invocations and attributions
-├── artifacts/                     file reads, mutations, commands, tests
-└── events/deterministic.jsonl     events and findings, in source order
-```
-
-Each record carries a `confidence` value (`observed`, `reconstructed`,
-`inferred`) and a `source` reference to a line and byte range in the raw
-snapshot. No record pretends an absence is a fact, and no record pretends
-reconstruction is observation.
-
-### Pipe JSONL through stdout
-
-Commands write one JSON object per line on stdout and diagnostics on stderr.
-This makes discovery and ingestion composable:
-
-```bash
-npm run --silent dvdst -- sessions <root> --format jsonl \
-  | npm run --silent dvdst -- ingest --store .dvdst/store
-```
-
-### Join streams with jq
-
-Attributions and commands share a tool-call id. This join reports every
-command that ran inside a skill span:
-
-```bash
-jq -n --slurpfile a "$BASE/records/skill-attributions.jsonl" \
-      --slurpfile c "$BASE/artifacts/commands.jsonl" \
- '($a[] | select(.recordKind=="tool-call")) as $at
-  | ($c[] | select(.toolCallId==$at.recordId)) as $cmd
-  | {command: $cmd.command, failed: $cmd.result.isError, skills: [$at.labels[].invocationId]}'
-```
-
-The jq cookbook in `docs/cookbook.md` covers skill versions by content hash,
-attributed tool use, validation, failures, and per-session outcomes. Each
-recipe's output is asserted by a test, so the recipes do not drift from the
-extractors.
-
 ## Status
 
 Release `0.1.0`. The ten-case benchmark matches every devlog status, and the
@@ -219,6 +247,7 @@ compatibility policy, and release checks in `docs/release.md`.
 
 ## Documentation
 
+- [Agent guide](docs/agents.md) - setup, session selection, machine-readable workflows, and limits.
 - [Capabilities and interfaces](docs/interfaces.md) - source support, commands, library, and Omakase integrations.
 - `docs/usage.md` - command reference with real Omakase paths.
 - `docs/extractors.md` - project extractors and the script library.

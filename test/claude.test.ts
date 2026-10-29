@@ -101,6 +101,6 @@ describe("session resolution across sources", () => {
     const { home, claude } = await homes();
     assert.equal(await resolveSession("1111", { home, cwd: "/work/my.app", env: {} }), join(claude, "11111111-aaaa.jsonl"));
     assert.equal(await resolveSession("2222", { home, cwd: "/elsewhere", env: {} }), join(claude, "22222222-bbbb.jsonl"));
-    await assert.rejects(resolveSessions({ home, env: {}, specs: [], source: "codex" as never }), /--source must be pi, claude, or all/);
+    await assert.rejects(resolveSessions({ home, env: {}, specs: [], source: "unknown" as never }), /--source must be pi, claude, codex, or all/);
   });
 });

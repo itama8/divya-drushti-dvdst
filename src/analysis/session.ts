@@ -15,7 +15,7 @@ export interface SessionData {
   session: string;
   /** Working directory recorded in the header. */
   cwd: string | null;
-  /** Entries with the line and byte range of each. A Claude Code session is converted to the Pi entry shape. */
+  /** Entries with the line and byte range of each. Claude Code and Codex sessions are converted to the Pi entry shape. */
   records: SourceRecord[];
   overview: Row;
   turns: Row[];

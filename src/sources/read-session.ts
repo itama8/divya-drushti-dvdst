@@ -1,11 +1,13 @@
 import { isObject, readJsonl, type SourceRecord } from "../pi/read-jsonl.js";
 import { claudeToCanonical, isClaudeEntry } from "./claude.js";
+import { codexToCanonical } from "./codex.js";
 
-export type SessionSource = "pi" | "claude";
+export type SessionSource = "pi" | "claude" | "codex";
 
 export function detectSource(records: SourceRecord[]): SessionSource {
   for (const record of records.slice(0, 50)) {
     if (isObject(record.value) && record.value.type === "session") return "pi";
+    if (isObject(record.value) && record.value.type === "session_meta") return "codex";
     if (isClaudeEntry(record.value)) return "claude";
   }
   return "pi";
@@ -21,5 +23,9 @@ export async function readSessionRecords(path: string): Promise<{ source: Sessio
   const raw = await readJsonl(path);
   const source = detectSource(raw);
   // `lines` counts the entries of the file itself, which a conversion may merge or drop.
-  return { source, records: source === "claude" ? claudeToCanonical(raw) : raw, lines: raw.length };
+  return { source, records: canonicalRecords(raw, source), lines: raw.length };
+}
+
+export function canonicalRecords(records: SourceRecord[], source = detectSource(records)): SourceRecord[] {
+  return source === "claude" ? claudeToCanonical(records) : source === "codex" ? codexToCanonical(records) : records;
 }

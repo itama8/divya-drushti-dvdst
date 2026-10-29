@@ -2,9 +2,23 @@
 
 ## Unreleased
 
+- Lead with agent onboarding: runnable checkout setup, cross-agent query recipes,
+  source selection and failure handling in `docs/agents.md`, root `AGENTS.md`,
+  and the reusable session-analysis skill. Keep human workflows secondary.
+
+- Add Codex session analysis, context, command/file inspection, handoffs, and
+  cross-agent selection with `--source codex|all`. Preserve source references,
+  normalize native shell calls and supported literal exec batches, join shell
+  polling completions, and expose multi-file patch paths and recorded usage.
+- Extend the stored ingestion, normalization, artifact, and finding pipeline to
+  Claude Code and Codex with verbatim snapshots and separate agent namespaces.
+  Live adapters and review frames remain Pi-only; analysis reads one rollout
+  segment and leaves unsupported exec scripts opaque.
+
 - Document source support by workflow and inventory CLI, library, extractor,
   skill, and Omakase extension interfaces. Claude Code analysis and Codex
-  staging are distinguished from the Pi-only store and bundled live adapter.
+  staging were initially distinguished from the Pi-only store and bundled live
+  adapter; the store now supports all three agents as described above.
 - `dvdst review --input <events.jsonl> [--watch]` emits inferred review frames
   when Pi settles after successful edits or writes. Frames list mutation
   evidence, failed commands, and successful tests after the final mutation.

@@ -3,6 +3,8 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { isObject } from "../pi/read-jsonl.js";
+import { isClaudeEntry } from "../sources/claude.js";
+import type { SessionSource } from "../sources/read-session.js";
 import { exists, sourceSegment, writeAtomic } from "./fs-util.js";
 
 export type SessionManifestStatus = "complete" | "partial";
@@ -35,6 +37,7 @@ const MAX_DIAGNOSTICS = 20;
 const SHA256_RE = /^[a-f0-9]{64}$/;
 
 interface HeaderInfo {
+  agent: SessionSource;
   line: number;
   id: string;
   version?: number;
@@ -62,7 +65,7 @@ interface PreviousState {
 }
 
 /**
- * Streams a Pi session file once. Computes the full-content hash, validates
+ * Streams a supported session file once. Computes the full-content hash, validates
  * every line, counts entry types, and locates the session header. Memory use
  * stays proportional to the diagnostics list, not to the file size.
  */
@@ -98,15 +101,27 @@ function scanSource(source: string): Promise<ScanResult> {
       entries += 1;
       const type = typeof value.type === "string" ? value.type : "unknown";
       byType[type] = (byType[type] ?? 0) + 1;
-      if (type !== "session" || header !== undefined) return;
+      if (header !== undefined) {
+        if (header.agent === "claude" && value.sessionId === header.id) {
+          if (header.cwd === undefined && typeof value.cwd === "string") header.cwd = value.cwd;
+          if (header.timestamp === undefined && typeof value.timestamp === "string") header.timestamp = value.timestamp;
+        }
+        return;
+      }
+      const agent: SessionSource | undefined = type === "session" ? "pi" : type === "session_meta" ? "codex" : isClaudeEntry(value) && value.isSidechain !== true ? "claude" : undefined;
+      if (agent === undefined) return;
+      const raw = value;
+      if (agent === "codex") { if (!isObject(value.payload)) return; value = value.payload; }
+      if (!isObject(value)) return;
       header = {
         line,
-        id: typeof value.id === "string" ? value.id : "",
+        agent,
+        id: agent === "claude" ? String(raw.sessionId) : typeof value.id === "string" ? value.id : "",
         ...(typeof value.version === "number" ? { version: value.version } : {}),
         ...(typeof value.cwd === "string" ? { cwd: value.cwd } : {}),
         ...(typeof value.timestamp === "string" ? { timestamp: value.timestamp } : {}),
       };
-      if (value.version !== undefined && typeof value.version !== "number") addDiagnostic(line, "session version must be a number");
+      if (agent === "pi" && value.version !== undefined && typeof value.version !== "number") addDiagnostic(line, "session version must be a number");
       if (value.cwd !== undefined && typeof value.cwd !== "string") addDiagnostic(line, "session cwd must be a string");
       if (value.timestamp !== undefined && typeof value.timestamp !== "string") addDiagnostic(line, "session timestamp must be a string");
     };
@@ -139,7 +154,7 @@ function scanSource(source: string): Promise<ScanResult> {
         return;
       }
       if (header === undefined) {
-        reject(new SessionIngestError("no valid Pi session header", source));
+        reject(new SessionIngestError("no valid supported session header", source));
         return;
       }
       if (header.id.length === 0) {
@@ -218,7 +233,7 @@ function changeField(changeClass: SessionChangeClass, previous: PreviousState | 
 }
 
 /**
- * Ingests one Pi session file into the evidence store. The raw source is
+ * Ingests one supported session file into the evidence store. The raw source is
  * preserved verbatim in a content-addressed snapshot together with a manifest
  * and a source-state summary. A repeated unchanged ingestion performs no
  * writes. Changed files produce a new snapshot whose manifest records whether
@@ -235,7 +250,7 @@ export async function ingestSessionFile(source: string, store: string): Promise<
   }
   const summary = await scanSource(resolvedSource);
   const sessionId = summary.header.id;
-  const sessionDirectory = join(resolvedStore, "sessions", "pi", sourceSegment(sessionId));
+  const sessionDirectory = join(resolvedStore, "sessions", summary.header.agent, sourceSegment(sessionId));
   const snapshot = join(sessionDirectory, "snapshots", summary.hash);
   const previous = await readPreviousState(sessionDirectory);
   const manifestStatus: SessionManifestStatus = summary.diagnostics.length === 0 ? "complete" : "partial";
@@ -284,7 +299,7 @@ export async function ingestSessionFile(source: string, store: string): Promise<
     await copyStream(resolvedSource, join(temporary, "source", "raw.jsonl"));
     const manifest = {
       schemaVersion: 1,
-      adapter: { name: "pi", version: 1 },
+      adapter: { name: summary.header.agent, version: 1 },
       status: manifestStatus,
       source: {
         path: resolvedSource,

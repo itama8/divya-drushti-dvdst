@@ -1,25 +1,30 @@
 ---
 name: dvdst-session-analysis
-description: Analyze coding-agent sessions with dvdst instead of parsing session JSONL by hand. Use when asked what happened in a Pi or Claude Code session, where tokens, time, or money went, which commands or tools failed, what an agent read before editing, or how sessions compare across a project.
-compatibility: Requires Node 22 or newer and a dvdst checkout with dependencies installed. Reads Pi and Claude Code session files. Makes no model calls and no network requests.
+description: Analyze coding-agent sessions with dvdst instead of parsing session JSONL by hand. Use when asked what happened in a Pi, Claude Code, or Codex session, where tokens, time, or money went, which commands or tools failed, what an agent read before editing, or how sessions compare across a project.
+metadata:
+  compatibility: Requires Node 22+ and a dvdst checkout with dependencies installed; reads Pi, Claude Code, and Codex files locally.
 ---
 
 # dvdst session analysis
 
 dvdst turns session files into rows: one JSON object per line, the same shape
-for every session and both agents. Query the rows with `jq`. Do not read or
-parse the raw session JSONL first. It costs far more context and you will
-rebuild what these commands already do.
+for every session and all three agents. Start with focused rows before reading
+raw transcripts. Inspect raw source only when a claim needs verification or an
+unsupported format cannot answer the question. `jq` is optional for filtering.
 
 Run `dvdst`. If it is not on the path, run `node <dvdst checkout>/bin/dvdst.mjs`
-with the same arguments. It works from any directory.
+with the same arguments. It works from any directory and loads dependencies
+from its checkout. If dependencies are missing, run `npm ci --include=dev`
+inside that checkout with Node 22+. No build, model credentials, host extension,
+or ingest step is required for analysis. For full setup and recipes, read
+`docs/agents.md` in the DVDST checkout.
 
 ## 1. Pick the stream
 
 | command | one row per | use it for |
 | --- | --- | --- |
 | `dvdst overview` | session | time, tokens, cost, tool totals, first prompt |
-| `dvdst turns` | model request | tokens, context size, cost, model, generation time |
+| `dvdst turns` | canonical assistant message | tokens, context size, cost, model, generation time |
 | `dvdst calls` | tool call with its result | what ran, duration, exit code, result size, truncation, files read and changed, repeats |
 | `dvdst context` | system prompt section | what the session started with, and its size |
 
@@ -30,16 +35,27 @@ its type and meaning. Do not guess field names.
 
 ```bash
 dvdst overview latest                          # newest session of this directory's project
-dvdst calls 01a1180d                           # a session id or id prefix, from either agent
+dvdst calls 01a1180d                           # a session id or id prefix, from any agent
 dvdst calls /path/to/session.jsonl             # a file
 dvdst overview --last 50                       # the newest 50
 dvdst overview --project omakase-v2 --since 2026-10-01
 dvdst overview --project omakase-v2 --source claude
+dvdst overview --project omakase-v2 --source all
+dvdst calls latest --source codex --errors
 ```
 
 With no session, the commands read `$PI_SESSION_FILE`, which is the current
 session inside Pi. `latest`, `--last`, and `--since` select Pi sessions unless
-you pass `--source claude` or `--source all`.
+you pass `--source claude`, `--source codex`, or `--source all`. `DVDST_SOURCE`
+sets that default. Verify `overview.path`, `session`, and `firstPrompt` before
+using a discovered transcript: `latest` can refer to another concurrent agent,
+and discovery can fall back to other projects when the current cwd has none.
+Prefer an exact path for a particular session. `--project <name>` constrains
+project discovery; `--root <dir>` selects a flat transcript directory.
+
+`--source` belongs to the analysis commands, not `handoff`, `files`, or store
+commands. Pass those the exact transcript path returned by `overview`. The
+standalone `sessions` filename discovery command remains Pi-only.
 
 ## 3. Ask the question
 
@@ -79,14 +95,19 @@ Use the fields the rows already carry before you write a pattern over
 `rereads` marks repeated reads, and `commandAttempt` and `failureRun` count
 repeats and consecutive failures. `overview` totals them per session.
 
-Rows are cached per session, so run dvdst again for each question. Do not copy
-rows to a file first.
+Rows are cached per session; rerun focused queries as needed. `--no-cache`
+bypasses caching for one analysis command.
 
 `calls` takes `--tool <name>` and `--errors`. Add `--full` only when you need
 the arguments and result text of specific calls, and filter first:
 `dvdst calls <session> --full | jq 'select(.seq == 42)'`.
 
-For a closeout summary of one session, run `dvdst handoff <session>`.
+For a machine-readable closeout, run `dvdst handoff <session> --format json`.
+For stored findings, `dvdst events <session> --store <directory>` prints a
+snapshot descriptor; findings are in `<snapshot>/events/deterministic.jsonl`.
+Staging is a separate optional index mutation workflow. Consult
+`docs/session-staging.md` in the checkout before using it; normal reviewed Git
+staging is also supported. Analysis does not require staging.
 
 ## 4. When no stream answers it
 
@@ -106,7 +127,12 @@ has two complete extractors in `examples/extractors/`.
 - `durationMs` of Pi calls made in one message is an upper bound.
 - A Claude Code session has no cost, no request start time, and no system
   prompt. Those fields are null. Do not report null as zero.
-- A session that is still being written may be skipped. The command says so on
-  stderr and exits 1 after printing the others.
+- Codex turns are recorded assistant items, not guaranteed provider request
+  counts. Usage is attached once where recorded; cost and request start times
+  remain null. Analysis covers the supplied rollout segment. Complex exec
+  scripts remain opaque; supported literal batches expose their nested tools.
+- An incomplete line in a growing transcript may make that file fail. Analysis
+  can emit rows for other sessions and still exit nonzero; inspect stderr and
+  do not treat partial output as complete. Retry after the file settles.
 - Cite the `session` and `line` of the rows behind a finding, so a reader can
   check it against the session file.

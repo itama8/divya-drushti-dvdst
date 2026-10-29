@@ -205,10 +205,10 @@ counts how many times the session has run that exact bash command.
 uses the built-in rules and the project's `.dvdst/config.json`; see
 [`docs/events.md`](events.md#project-rules).
 
-### Pi and Claude Code sessions
+### Pi, Claude Code, and Codex sessions
 
-dvdst reads sessions of both agents and tells them apart by content. Rows
-have one shape for both, and `overview` rows name the agent in `source`.
+dvdst reads sessions of all three agents and tells them apart by content. Rows
+have one shape across agents, and `overview` rows name the agent in `source`.
 
 ```bash
 dvdst overview --project omakase-v2 --source claude
@@ -216,9 +216,9 @@ dvdst overview --project omakase-v2 --source all --since 2026-10-10
 dvdst calls 8f7da1f7 --errors          # an id is found whichever agent wrote it
 ```
 
-`latest`, `--last`, and `--since` select Pi sessions unless `--source claude`
-or `--source all` says otherwise. `DVDST_SOURCE` sets the default. Sessions of
-both agents are ordered by start time.
+`latest`, `--last`, and `--since` select Pi sessions unless `--source claude`,
+`--source codex`, or `--source all` says otherwise. `DVDST_SOURCE` sets the default. Sessions of
+all agents are ordered by start time.
 
 A Claude Code session differs in what it records:
 
@@ -233,9 +233,14 @@ A Claude Code session differs in what it records:
   not recorded. They are null, and `context` has no rows.
 - Subagent sidechain entries are left out.
 
-`handoff`, `files`, `commands`, and `trace` accept a Claude Code session too.
-The store commands, `ingest`, `normalize`, `artifacts`, and `events`, take Pi
-sessions only. Staging also supports Claude Code and Codex evidence through
+`handoff`, `files`, `commands`, and `trace` accept all three agents, as do
+`ingest`, `normalize`, `artifacts`, and `events`. Codex discovery uses recorded
+cwd under `$CODEX_HOME/sessions` (default `~/.codex/sessions`). Codex turns
+represent assistant response items; usage is attached once where recorded,
+with missing cost and request start times left null. Native shell calls and
+supported literal exec batches expose commands; arbitrary scripts stay opaque.
+Recorded base instructions feed `context`. Analysis and ingestion read only the
+supplied rollout segment. See [source limits](interfaces.md#session-analysis). Staging also supports Claude Code and Codex evidence through
 the routes described in [session staging](session-staging.md).
 
 `calls` takes `--tool <name>` and `--errors`. `--full` adds the arguments and
@@ -571,6 +576,7 @@ npm run handoff -- --session test/fixtures/skill-session.jsonl --devlog test/fix
 | `src/pi/bash-effects.ts` | infer the files a bash command reads and mutates from its text |
 | `src/config/config.ts` | load project command classes and ignored paths from `.dvdst/config.json` |
 | `src/analysis/rows.ts` | derive overview, turns, calls, and context rows, and declare their schema |
+| `src/sources/codex.ts` | convert Codex rollout response items, supported exec batches, and recorded usage |
 | `src/sources/claude.ts` | convert a Claude Code transcript to the entry shape dvdst reads |
 | `src/sources/read-session.ts` | detect the agent of a session file and read it |
 | `src/analysis/cache.ts` | cache derived rows per session file |

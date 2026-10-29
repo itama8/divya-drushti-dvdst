@@ -14,7 +14,7 @@ function usage(status = 2): never {
   console.error("Usage: dvdst ingest <session.jsonl...> [--store <directory>]");
   console.error("       dvdst ingest --live <events.jsonl> [--store <directory>]");
   console.error("       dvdst ingest [--store <directory>]  reads session paths from stdin");
-  console.error("Preserves Pi session files or one live event stream in the local evidence store.");
+  console.error("Preserves Pi, Claude Code, and Codex session files or one live event stream in the local evidence store.");
   process.exit(status);
 }
 

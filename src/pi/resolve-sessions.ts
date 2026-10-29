@@ -1,9 +1,11 @@
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 import { open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { sessionIdFromFilename } from "./sessions.js";
 
-export type SourceSelection = "pi" | "claude" | "all";
+export type SourceSelection = "pi" | "claude" | "codex" | "all";
 
 export interface ResolveSessionsOptions {
   /** Session specs: a file, a directory, a session id, an id or timestamp prefix, or `latest`. */
@@ -97,14 +99,52 @@ async function startTime(path: string, filename: string): Promise<string> {
   return new Date(info?.mtimeMs ?? 0).toISOString();
 }
 
+async function codexHeader(path: string): Promise<Record<string, unknown> | undefined> {
+  const stream = createReadStream(path);
+  const lines = createInterface({ input: stream, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      if (!line.trim()) continue;
+      const value = JSON.parse(line);
+      return value !== null && typeof value === "object" && value.type === "session_meta" && value.payload !== null && typeof value.payload === "object" ? value.payload : undefined;
+    }
+  } catch { /* Not a readable rollout. */ }
+  finally { lines.close(); stream.destroy(); }
+  return undefined;
+}
+
+async function codexFiles(home: string, options: ResolveSessionsOptions, localOnly = false): Promise<string[]> {
+  const base = join((options.env ?? process.env).CODEX_HOME ?? join(home, ".codex"), "sessions");
+  const found: string[] = [];
+  const walk = async (directory: string, depth: number): Promise<void> => {
+    for (const item of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
+      const path = join(directory, item.name);
+      if (item.isDirectory() && depth < 3) await walk(path, depth + 1);
+      else if (item.isFile() && item.name.startsWith("rollout-") && item.name.endsWith(".jsonl")) {
+        const header = await codexHeader(path);
+        if (!header || typeof header.cwd !== "string") continue;
+        if (options.project !== undefined && !(header.cwd === options.project || header.cwd.endsWith(`/${options.project}`))) continue;
+        found.push(path);
+      }
+    }
+  };
+  await walk(base, 0);
+  if (options.project !== undefined || !localOnly) return found;
+  const cwd = resolve(options.cwd ?? process.cwd());
+  const local: string[] = [];
+  for (const path of found) if ((await codexHeader(path))?.cwd === cwd) local.push(path);
+  return local;
+}
+
 async function candidate(path: string): Promise<Candidate> {
   const filename = basename(path);
-  return { path, filename, id: sessionIdFromFilename(filename) ?? filename.replace(/\.jsonl$/, ""), startedAt: await startTime(path, filename) };
+  return { path, filename, id: sessionIdFromFilename(filename) ?? /([0-9a-f]{8}-[0-9a-f-]{27})\.jsonl$/.exec(filename)?.[1] ?? filename.replace(/\.jsonl$/, ""), startedAt: await startTime(path, filename) };
 }
 
 async function candidatesIn(directories: string[]): Promise<Candidate[]> {
   const found: Candidate[] = [];
   for (const directory of directories) {
+    if (await isFile(directory)) { found.push(await candidate(directory)); continue; }
     const names = (await readdir(directory).catch(() => [] as string[])).filter((name) => name.endsWith(".jsonl"));
     for (const name of names) {
       const path = join(directory, name);
@@ -148,9 +188,10 @@ async function sessionRoots(options: ResolveSessionsOptions, home: string, sourc
     return { directories: [options.root], implicit: false };
   }
   const layouts = layoutsFor(source);
+  const codex = source === "codex" || source === "all" ? await codexFiles(home, options, true) : [];
   if (options.project !== undefined) {
     const wanted = options.project;
-    const matches: string[] = [];
+    const matches: string[] = [...codex];
     for (const layout of layouts) {
       const names = await readdir(layout.base(home)).catch(() => [] as string[]);
       matches.push(...names.sort().filter((name) => layout.matchesProject(name, wanted)).map((name) => join(layout.base(home), name)));
@@ -168,8 +209,8 @@ async function sessionRoots(options: ResolveSessionsOptions, home: string, sourc
     const directory = join(layout.base(home), layout.directoryFor(cwd));
     if (await isDirectory(directory)) forCwd.push(directory);
   }
-  if (forCwd.length > 0) return { directories: forCwd, implicit: true };
-  return { directories: await projectDirectories(home, layouts), implicit: false };
+  if (forCwd.length > 0 || codex.length > 0) return { directories: [...forCwd, ...codex], implicit: true };
+  return { directories: [...await projectDirectories(home, layouts), ...(source === "codex" || source === "all" ? await codexFiles(home, options) : [])], implicit: false };
 }
 
 function sinceKey(since: string): string {
@@ -199,7 +240,7 @@ async function resolveSpec(spec: string, roots: Roots): Promise<Candidate[]> {
   if (matches.length === 1) return matches;
   if (matches.length === 0) {
     throw new SessionResolveError(
-      `No session matches ${JSON.stringify(spec)}. Pass a session file, a directory, a session id or id prefix, a filename timestamp prefix, or "latest". Use --root <dir> or --project <name> to choose where to look, and --source claude for Claude Code sessions.`,
+      `No session matches ${JSON.stringify(spec)}. Pass a session file, a directory, a session id or id prefix, a filename timestamp prefix, or "latest". Use --root <dir> or --project <name> to choose where to look, and --source claude or --source codex to choose an agent.`,
     );
   }
   const shown = matches.slice(-5).map((entry) => `  ${entry.filename}`).join("\n");
@@ -208,7 +249,7 @@ async function resolveSpec(spec: string, roots: Roots): Promise<Candidate[]> {
 
 function selectedSource(options: ResolveSessionsOptions): SourceSelection {
   const value = options.source ?? (options.env ?? process.env).DVDST_SOURCE ?? "pi";
-  if (value !== "pi" && value !== "claude" && value !== "all") throw new SessionResolveError(`--source must be pi, claude, or all, not ${JSON.stringify(value)}`);
+  if (value !== "pi" && value !== "claude" && value !== "codex" && value !== "all") throw new SessionResolveError(`--source must be pi, claude, codex, or all, not ${JSON.stringify(value)}`);
   return value;
 }
 
@@ -233,12 +274,13 @@ export async function resolveSessions(options: ResolveSessionsOptions): Promise<
 
   let candidates: Candidate[];
   if (options.specs.length > 0) {
-    const roots = await sessionRoots(options, home, source);
+    const allPaths = (await Promise.all(options.specs.map(async spec => await isFile(spec) || await isDirectory(spec)))).every(Boolean);
+    const roots = allPaths ? { directories: [], implicit: false } : await sessionRoots(options, home, source);
     const explicit = options.root !== undefined || options.project !== undefined || options.source !== undefined;
     // `latest` stays inside the selected source; an id search may cross sources.
-    const idRoots: Roots = explicit
+    const idRoots: Roots = explicit || allPaths
       ? roots
-      : { ...(await sessionRoots(options, home, "all")), widen: () => projectDirectories(home, LAYOUTS) };
+      : { ...(await sessionRoots(options, home, "all")), widen: async () => [...await projectDirectories(home, LAYOUTS), ...await codexFiles(home, options)] };
     const seen = new Set<string>();
     candidates = [];
     for (const spec of options.specs) {

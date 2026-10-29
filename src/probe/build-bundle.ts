@@ -103,7 +103,7 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
   const [{ records }, sessionStat] = await Promise.all([readSessionRecords(options.sessionPath), stat(options.sessionPath)]);
   const headerRecord = records.find((record) => isObject(record.value) && record.value.type === "session");
   if (!headerRecord || !isObject(headerRecord.value) || typeof headerRecord.value.id !== "string") {
-    throw new Error("The session has no valid Pi session header");
+    throw new Error("The session has no valid supported session header");
   }
   const sessionHeader = headerRecord.value;
   const config = await loadProjectConfig({ cwd: typeof sessionHeader.cwd === "string" ? sessionHeader.cwd : undefined });
@@ -240,6 +240,9 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
   const attributedRecords = [...attributedRecordMap.values()];
 
   const fileOperations = toolCalls.flatMap((call) => {
+    if (call.name === "apply_patch" && Array.isArray(call.arguments.paths)) {
+      return call.arguments.paths.filter((p): p is string => typeof p === "string").map(sourcePath => ({ path: normalizeSessionPath(sourcePath, sessionHeader.cwd), sourcePath, operation: "edit", succeeded: results.get(call.id)?.isError === false, toolCallId: call.id, source: call.source }));
+    }
     const sourcePath = typeof call.arguments.path === "string" ? call.arguments.path : undefined;
     if (!sourcePath || !["read", "edit", "write"].includes(call.name)) return [];
     return [{

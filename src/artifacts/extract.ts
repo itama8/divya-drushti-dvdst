@@ -192,6 +192,15 @@ export async function extractArtifacts(options: {
     const payload = resultPayload(result);
 
     switch (invocation.name) {
+      case "apply_patch": {
+        for (const path of Array.isArray(args.paths) ? args.paths.filter((p): p is string => typeof p === "string") : []) {
+          fileMutations.push({ schemaVersion: 1, kind: "file-mutation", path, operation: "apply_patch", toolCallId,
+            patch: { observed: true, exact: false, reason: "recorded patch paths; no repository before-and-after verification" },
+            succeeded: result === undefined ? null : !result.isError, source: invocation.source,
+            ...(result === undefined ? {} : { resultSource: result.source }) });
+        }
+        break;
+      }
       case "read": {
         if (path === undefined) {
           unknownTools.push(unknownRecord(invocation));
