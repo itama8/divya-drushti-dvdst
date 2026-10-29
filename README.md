@@ -4,13 +4,13 @@ Give your coding agent a way to look back at its work.
 
 ## What DVDST does
 
-DVDST helps your agent make sense of coding sessions from **Pi, Claude Code,
+DVDST is a tool for your agent. It helps the thing make sense of coding sessions from **Pi, Claude Code,
 and Codex**. It turns long session logs into focused answers about what the
 agent did, what commands returned, and where time and context went.
 
 With it, you can ask your agent to:
 
-- **Pick up earlier work.** “What were we doing, which files were involved,
+- **Pick up earlier work.** “What were we doing,
   and where should we continue?” Your agent can prepare a compact handoff
   instead of bringing the whole conversation into its context.
 - **Find wasted effort.** “Why did this take so long?” It can look for repeated
@@ -19,7 +19,7 @@ With it, you can ask your agent to:
   did we test?” It can inspect recorded results and point back to the session
   lines behind its answer.
 - **Prepare a focused commit.** “Stage these edits without sweeping in the other
-  agent's work.” For supported edit formats, DVDST can replay selected changes into
+  agent's work.” For supported edit formats (edits using bash aren't automatically tagged), DVDST can replay selected changes into
   Git's staging area while leaving unrelated unstaged work alone. Your agent still
   reviews the diff and handles the commit.
 
