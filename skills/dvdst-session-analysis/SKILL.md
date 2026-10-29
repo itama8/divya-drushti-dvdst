@@ -1,6 +1,6 @@
 ---
 name: dvdst-session-analysis
-description: Analyze coding-agent sessions with dvdst instead of parsing session JSONL by hand. Use when asked what happened in a Pi, Claude Code, or Codex session, where tokens, time, or money went, which commands or tools failed, what an agent read before editing, or how sessions compare across a project.
+description: Use DVDST when looking back at Pi, Claude Code, or Codex sessions, for any purpose.
 metadata:
   compatibility: Requires Node 22+ and a dvdst checkout with dependencies installed; reads Pi, Claude Code, and Codex files locally.
 ---
