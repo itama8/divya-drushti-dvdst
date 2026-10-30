@@ -12,6 +12,11 @@ Pi, Claude Code, and Codex transcripts feed a common row interface:
 - `turns`: model requests, tokens, context use, and recorded timing
 - `calls`: tool calls joined to results, failures, duration, output size,
   truncation, command classes, inferred bash file effects, and repetition
+- `call`: exact call retrieval by file and ID/sequence, or a snapshot-pinned
+  reference, with independently bounded arguments, command, and result text
+- `messages`: role-filtered canonical message rows with bounded text and call links
+- `search`: literal search over message text, shell commands, and tool results
+- `message`: exact message and surrounding conversation, by sequence or snapshot reference
 - `context`: recorded system prompt sections and sizes
 - `schema`: field descriptions for built-in streams and project extractors
 - `cache`: inspect or clear the derived row cache
@@ -26,6 +31,21 @@ Rows support JSONL, JSON, and TSV. `--full` includes arguments and result text.
 Session selection accepts files, IDs, prefixes, and `latest`, with project,
 root, time, and count filters. `--source all` means Pi, Claude Code, and Codex.
 The default source for recent-session selection is Pi.
+
+Built-in streams also accept `--fields`, `--limit`, and `--offset`; `calls`
+adds `--id`, `--seq`, and `--class`. `calls.ref` identifies the exact file,
+raw snapshot, call ID, and source line. Any file change invalidates it.
+`schema call` describes the bounded retrieval output. See
+[exact call retrieval](evidence-retrieval.md) for formats, offsets, and limits.
+
+`messages` and `search` share analysis session selection and JSONL/JSON/TSV
+formats, defaulting to 20 rows and 240-character text slices. `message` returns
+JSON with a bounded neighborhood, text continuation, and omitted-neighbor refs;
+it can also anchor from a call ref. Conversation queries offer `--page` counts,
+continuation, and failed-source metadata. Search cites matched Claude text/call
+blocks, not only their merged message's first line. Codex channels are retained.
+Thinking/reasoning blocks, binary payloads, excluded entries, and missing history
+are not invented as message text. See [conversation exploration](conversation-exploration.md).
 
 Claude conversion normalizes core tools to `bash`, `read`, `edit`, and `write`.
 It excludes sidechain entries. Missing cost and generation timing stay null,
@@ -61,6 +81,16 @@ dvdst handoff /path/to/claude-transcript.jsonl
 
 These commands use a direct bundle path. Their file summaries do not include
 all inferred bash reads available in call rows and stored artifacts. Codex patch paths are included in direct file summaries.
+
+`trace` recognizes arbitrary tool calls and canonical record IDs in addition
+to its existing associations. JSON reports `found`, source locations, and
+call references; missing IDs exit nonzero in all formats. Probe and handoff
+schemas are now `0.2.0-probe` and `0.2.0-handoff`. Their `validation` observations
+distinguish unfinished tests, successful exact-argument retries, and tests
+started after the last potential mutation settled. Historical failure totals
+remain available. A handoff can report `unfinished` or `validation-stale`;
+opaque effects prevent `stable`. `tests.ran` requires a completed test result.
+Devlog generation preserves `stable` rather than upgrading it to acceptance.
 
 ## Recorded-change staging
 
@@ -125,6 +155,8 @@ changes. See [live streams](live-streams.md).
 - Library: TypeScript exports from `dvdst`, including `loadSession`,
   `loadSessions`, row derivation, session resolution, bash effects, command
   classification, configuration, and extractor loading, for scripts run with tsx
+- Conversation library: `loadConversation`, `conversationFromSession`,
+  `listMessages`, `searchConversation`, and `readMessage`, shared by the CLI
 - Project extractors: `.dvdst/extractors/` modules with `derive(session)` and
   optional `summarize(rows)`, run as `dvdst <name>` or `dvdst rows <name|file>`
 - Project rules: `.dvdst/config.json` for command classes and finding exclusions

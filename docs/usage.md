@@ -207,6 +207,18 @@ uses the built-in rules and the project's `.dvdst/config.json`; see
 
 ### Pi, Claude Code, and Codex sessions
 
+Built-in row streams accept `--fields`, `--limit`, and `--offset`; `calls`
+additionally supports `--id`, `--seq`, and `--class`. Expand one call with
+`dvdst call <session> --seq <n>` or `dvdst call --ref <ref>`, with bounded
+text and continuation offsets. See [exact call retrieval](evidence-retrieval.md)
+for the complete contract and updated handoff validation semantics.
+
+Use `messages` for bounded conversation rows, `search --query <literal>` to
+find text/commands/results, and `message --ref <ref>` for exact messages and
+neighbors. Conversation queries share analysis session selection and offer
+`--page` completeness/continuation metadata. See
+[conversation exploration](conversation-exploration.md).
+
 dvdst reads sessions of all three agents and tells them apart by content. Rows
 have one shape across agents, and `overview` rows name the agent in `source`.
 

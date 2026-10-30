@@ -116,6 +116,7 @@ come from the Pi extension:
 | Workflow | Pi | Claude Code | Codex |
 | --- | --- | --- | --- |
 | Session analysis: `overview`, `turns`, `calls`, `context` | Supported | Supported, with missing source fields | Supported, with source limits |
+| Conversation exploration: `messages`, `search`, `message` | Supported | Supported, with source-block provenance | Supported, with channels and segment limits |
 | Direct inspection and closeout: `files`, `commands`, `skills`, `trace`, `probe`, `handoff`, `handoff-devlog` | Supported | Supported through transcript conversion | Supported through rollout conversion |
 | Session-based Git staging | Supported | Supported | Supported for recorded patch formats |
 | Stored session pipeline: `ingest`, `normalize`, `artifacts`, `events` | Supported | Supported | Supported |
@@ -142,6 +143,31 @@ dvdst overview --project omakase-v2 --last 50 | jq -s 'sort_by(-.cost)[:5]'
 dvdst calls latest --errors
 dvdst schema calls
 ```
+
+Select compact evidence and expand one call without returning all payloads:
+
+```bash
+dvdst calls /path/to/session.jsonl --class test --limit 10 --fields session,seq,line,isError,ref
+dvdst call /path/to/session.jsonl --seq 42 --limit 2000
+dvdst call --ref '<ref copied from calls>' --result-offset 2000 --limit 2000
+```
+
+Call references pin the exact transcript segment and raw contents; refresh
+them after the file changes. See [exact call retrieval](docs/evidence-retrieval.md)
+for filtering, field selection, payload slices, and evidence limits.
+
+Find earlier requests, corrections, and replies, then inspect their context:
+
+```bash
+dvdst search /path/to/session.jsonl --query 'keep local Open' --role user --page
+dvdst message --ref '<messageRef copied from the hit>' --before 2 --after 2
+dvdst messages /path/to/session.jsonl --role user,assistant --limit 10
+```
+
+`search` can also target commands or tool results with `--in commands` or
+`--in results`. Message windows link to exact calls. See
+[conversation exploration](docs/conversation-exploration.md) for neighborhoods,
+source locations, and pagination/completeness metadata.
 
 These commands read Pi, Claude Code, and Codex sessions. Select with
 `--source pi|claude|codex|all`; the default remains Pi. For example:
@@ -238,6 +264,7 @@ evidence limits and watcher behavior.
 
 - [Agent guide](docs/agents.md) - setup, session selection, machine-readable workflows, and limits.
 - [Capabilities and interfaces](docs/interfaces.md) - source support, commands, library, and Omakase integrations.
+- [Conversation exploration](docs/conversation-exploration.md) - message search, surrounding conversation, and call links.
 - `docs/usage.md` - command reference with real Omakase paths.
 - `docs/extractors.md` - project extractors and the script library.
 - `docs/events.md` - event and finding schema, and per-finding jq recipes.

@@ -27,6 +27,8 @@ or ingest step is required for analysis. For full setup and recipes, read
 | `dvdst turns` | canonical assistant message | tokens, context size, cost, model, generation time |
 | `dvdst calls` | tool call with its result | what ran, duration, exit code, result size, truncation, files read and changed, repeats |
 | `dvdst context` | system prompt section | what the session started with, and its size |
+| `dvdst messages` | canonical message | browse prompts/replies with bounded text and tool links |
+| `dvdst search` | matching message/command/result | find earlier requests, corrections, decisions, or failures |
 
 Run `dvdst schema calls` before you write a filter. It prints every field with
 its type and meaning. Do not guess field names.
@@ -58,6 +60,30 @@ commands. Pass those the exact transcript path returned by `overview`. The
 standalone `sessions` filename discovery command remains Pi-only.
 
 ## 3. Ask the question
+
+For conversation questions, search first, then expand the exact hit:
+
+```bash
+dvdst search /path/to/session.jsonl --query 'keep local Open' --role user --page
+dvdst message --ref '<messageRef copied from the hit>' --before 2 --after 2
+dvdst messages /path/to/session.jsonl --role user --limit 10
+dvdst search /path/to/session.jsonl --query 'parser failed' --in results --limit 5
+```
+
+`messages` and `search` accept analysis session selection, `--fields`,
+`--offset`, JSONL/JSON/TSV, and default to 20 rows with 240-character text slices.
+Search is literal; add `--ignore-case` as needed. `--in` selects messages,
+commands, results, or all. Explicit roles filter every target. `--page` returns
+JSON counts, `nextOffset`, and failed-source metadata; partial queries still
+exit nonzero. Row offsets are not snapshot cursors.
+
+`message` returns the anchor and two neighbors per side by default (all roles,
+including tools), with 2000 characters per message. Continue the anchor with
+`--text-offset`, or use `beforeRef`/`afterRef` for more neighbors. `--limit` on
+this reader bounds characters per message. Tool links lead to `call`;
+`message --ref` also accepts call refs to show requesting context. Message
+refs require unchanged raw file contents. Use `schema messages`, `schema search`,
+and `schema message` for fields.
 
 Start with `overview` to find the sessions that matter, then open `calls` or
 `turns` for those. Every row carries `session`, so rows from many sessions can
@@ -98,9 +124,26 @@ repeats and consecutive failures. `overview` totals them per session.
 Rows are cached per session; rerun focused queries as needed. `--no-cache`
 bypasses caching for one analysis command.
 
-`calls` takes `--tool <name>` and `--errors`. Add `--full` only when you need
-the arguments and result text of specific calls, and filter first:
-`dvdst calls <session> --full | jq 'select(.seq == 42)'`.
+`calls` takes `--tool <name>`, `--errors`, `--class <name>`, `--id <callId>`,
+and `--seq <n>`. Built-in streams accept `--fields`, `--limit` (rows), and
+`--offset`, applied after filtering across selected segments. Keep source
+identity and references when projecting fields. Expand individual calls:
+
+```bash
+dvdst calls /path/to/session.jsonl --class test --limit 10 --fields session,seq,line,isError,ref
+dvdst call /path/to/session.jsonl --seq 42 --limit 2000
+dvdst call --ref '<ref copied from calls>' --limit 2000
+dvdst schema call
+```
+
+`call` returns JSON with call metadata and separate `command`, `args`
+(serialized JSON), and `result` slices. Each slice reports `nextOffset` and
+`truncated`. Continue with `--result-offset`, `--args-offset`, or
+`--command-offset`. The default limit is 4096 Unicode code points per field;
+maximum 65536. Missing results are null. References pin an exact file and raw
+snapshot; any append/change requires refreshing `calls`. Row offsets are not
+snapshot cursors. `--full` remains available for bulk payload analysis, and
+payload field projection requires it. See `docs/evidence-retrieval.md`.
 
 For a machine-readable closeout, run `dvdst handoff <session> --format json`.
 For stored findings, `dvdst events <session> --store <directory>` prints a
@@ -136,3 +179,12 @@ has two complete extractors in `examples/extractors/`.
   do not treat partial output as complete. Retry after the file settles.
 - Cite the `session` and `line` of the rows behind a finding, so a reader can
   check it against the session file.
+- Search on merged Claude text cites the matched block; its message's first
+  line may be earlier. Codex `channel` distinguishes analysis from final or
+  commentary replies. Thinking/reasoning blocks and binary content are not
+  substituted for conversation text. Recorded statements alone do not prove
+  implementation or acceptance.
+- Handoff `validation` distinguishes unfinished tests, exact-argument retries,
+  and tests dispatched after the last potential mutation settled. Historical
+  failures stay counted after retry. Parallel edit/test calls do not prove
+  ordering. `stable` describes validation evidence, not correctness or acceptance.

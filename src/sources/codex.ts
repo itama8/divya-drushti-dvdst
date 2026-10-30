@@ -101,7 +101,7 @@ export function codexToCanonical(records: SourceRecord[]): SourceRecord[] {
     } else if (entry.type === "response_item") {
       if (p.type === "message" && (p.role === "user" || p.role === "assistant" || p.role === "developer")) {
         if (p.role === "user" && /^\s*<(?:environment_context|permissions instructions)>/.test(text(p.content))) continue;
-        const message = { role: p.role, model, provider, thinkingLevel: effort, content: [{ type: "text", text: text(p.content) }] };
+        const message = { role: p.role, model, provider, thinkingLevel: effort, ...(typeof p.channel === "string" ? { channel: p.channel } : {}), content: [{ type: "text", text: text(p.content) }] };
         emit({ type: "message", message });
         if (p.role === "assistant") { lastAssistant = message; usageAssigned = false; }
       } else if ((p.type === "function_call" || p.type === "custom_tool_call") && typeof p.call_id === "string" && typeof p.name === "string") {

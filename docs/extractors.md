@@ -4,6 +4,11 @@ dvdst ships four row streams. A project adds its own with an extractor: a
 small file that turns one parsed session into rows. dvdst supplies the rest:
 session selection, project rules, and output formats.
 
+Conversation tools also expose `messages`, `search`, and `message`; ordinary
+conversation lookup does not require an extractor. Reuse a fully loaded
+session via `conversationFromSession(session)`, `listMessages`, and
+`searchConversation`. See [conversation exploration](conversation-exploration.md).
+
 ## Write an extractor
 
 Put a file in `.dvdst/extractors/` of the directory you run dvdst from. Its

@@ -120,11 +120,11 @@ export function claudeToCanonical(records: SourceRecord[]): SourceRecord[] {
         if (block.type === "tool_use" && typeof block.id === "string" && typeof block.name === "string") {
           const call = canonicalCall(block.name, isObject(block.input) ? block.input : {});
           toolNames.set(block.id, call.name);
-          content.push({ type: "toolCall", id: block.id, name: call.name, arguments: call.arguments, timestamp });
+          content.push({ type: "toolCall", id: block.id, name: call.name, arguments: call.arguments, timestamp, source: record.source });
         } else if (block.type === "thinking") {
           content.push({ type: "thinking", thinking: typeof block.thinking === "string" ? block.thinking : "" });
         } else if (block.type === "text") {
-          content.push({ type: "text", text: typeof block.text === "string" ? block.text : "" });
+          content.push({ type: "text", text: typeof block.text === "string" ? block.text : "", source: record.source });
         }
       }
       continue;

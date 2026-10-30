@@ -8,6 +8,8 @@ import { parseDevlogFrontmatter } from "../pi/parse-devlog.js";
 import { isObject, type SourceRecord, type SourceReference } from "../pi/read-jsonl.js";
 import { readSessionRecords } from "../sources/read-session.js";
 import { parseSkillBlock, skillNameFromContent } from "../pi/skill-block.js";
+import { deriveRows } from "../analysis/rows.js";
+import { summarizeValidation } from "../handoff/validation.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -67,6 +69,7 @@ export interface ProbeBundle {
   /** Commits the session created, read from `git commit` output. */
   commitsCreated: string[];
   skills: { invocations: SkillSeed[]; attributedRecords: JsonObject[] };
+  validation: ReturnType<typeof summarizeValidation>;
   devlogComparison?: JsonObject;
 }
 
@@ -100,7 +103,7 @@ function intersection<T>(left: T[], right: T[]): T[] {
 }
 
 export async function buildProbeBundle(options: BuildBundleOptions): Promise<ProbeBundle> {
-  const [{ records }, sessionStat] = await Promise.all([readSessionRecords(options.sessionPath), stat(options.sessionPath)]);
+  const [{ records, fingerprint }, sessionStat] = await Promise.all([readSessionRecords(options.sessionPath), stat(options.sessionPath)]);
   const headerRecord = records.find((record) => isObject(record.value) && record.value.type === "session");
   if (!headerRecord || !isObject(headerRecord.value) || typeof headerRecord.value.id !== "string") {
     throw new Error("The session has no valid supported session header");
@@ -321,7 +324,7 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
   }
 
   return {
-    schemaVersion: "0.1.0-probe",
+    schemaVersion: "0.2.0-probe",
     session: {
       id: sessionHeader.id,
       version: sessionHeader.version,
@@ -345,6 +348,7 @@ export async function buildProbeBundle(options: BuildBundleOptions): Promise<Pro
     goals,
     files: fileSummary,
     commands,
+    validation: summarizeValidation(deriveRows(records, options.sessionPath, { full: true, commandClasses: config.commandClasses, fingerprint }).calls),
     commitCandidates,
     commitsCreated,
     skills: { invocations: skillSeeds, attributedRecords },

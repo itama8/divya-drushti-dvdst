@@ -6,16 +6,21 @@ import { cacheUsage, clearCache } from "../analysis/cache.js";
 import { loadSessionFile, loadSessionRows } from "../analysis/session.js";
 import { resolveSessions, type SourceSelection } from "../pi/resolve-sessions.js";
 import { guardStdout } from "./stdout.js";
+import { CALL_SCHEMA, integerOption } from "../analysis/read-call.js";
+import { MESSAGES_SCHEMA, MESSAGE_SCHEMA, SEARCH_SCHEMA } from "../analysis/conversation-schema.js";
 
 guardStdout();
 
 const STREAM_NAMES = Object.keys(STREAMS) as StreamName[];
+const EXPLORATION_SCHEMAS = { call: CALL_SCHEMA, messages: MESSAGES_SCHEMA, message: MESSAGE_SCHEMA, search: SEARCH_SCHEMA };
 /** Fields that only --full adds. They are free-form, so they stay out of TSV. */
 const FULL_ONLY = ["args", "resultText", "text"];
 
 function usage(status = 2): never {
   console.error("Usage: dvdst <overview|turns|calls|context> [session...] [--last <n>] [--since <date>] [--root <dir>] [--project <name>] [--source pi|claude|codex|all]");
   console.error("                                                  [--tool <name>] [--errors] [--full] [--config <file>] [--no-cache] [--format jsonl|json|tsv]");
+  console.error("       calls also accepts --id <callId>, --seq <n>, --class <name>.");
+  console.error("       Built-in streams accept --fields <comma-separated names>, --limit <rows>, --offset <rows> (after filtering, across sessions).");
   console.error("       dvdst rows <extractor|file> [session...]   run a project extractor with the same selection and format options");
   console.error("       dvdst schema [stream|extractor] [--format text|json]");
   console.error("       dvdst cache [--clear]                       show or empty the row cache");
@@ -44,6 +49,12 @@ function printFields(name: string, description: string, fields: FieldSpec[] | un
 }
 
 async function printSchema(target: string | undefined, format: string): Promise<void> {
+  if (target !== undefined && Object.hasOwn(EXPLORATION_SCHEMAS, target)) {
+    const schema = EXPLORATION_SCHEMAS[target as keyof typeof EXPLORATION_SCHEMAS];
+    if (format === "json") process.stdout.write(`${JSON.stringify({ [target]: schema }, null, 2)}\n`);
+    else printFields(target, schema.description, schema.fields);
+    return;
+  }
   const extractors: LoadedExtractor[] = [];
   if (target === undefined) {
     for (const file of (await listExtractorFiles()).values()) extractors.push(await loadExtractorFile(file));
@@ -56,6 +67,7 @@ async function printSchema(target: string | undefined, format: string): Promise<
 
   if (format === "json") {
     const schema: Record<string, unknown> = Object.fromEntries(builtIn.map((name) => [name, STREAMS[name]]));
+    if (target === undefined) Object.assign(schema, EXPLORATION_SCHEMAS);
     for (const extractor of extractors) {
       schema[extractor.name] = { description: extractor.description, fields: extractor.fields ?? null, file: extractor.file, summarizes: extractor.summarize !== undefined };
     }
@@ -63,6 +75,7 @@ async function printSchema(target: string | undefined, format: string): Promise<
     return;
   }
   for (const name of builtIn) printFields(name, STREAMS[name].description, STREAMS[name].fields);
+  if (target === undefined) for (const [name, spec] of Object.entries(EXPLORATION_SCHEMAS)) printFields(name, spec.description, spec.fields);
   for (const extractor of extractors) printFields(extractor.name, extractor.description, extractor.fields, `extractor ${extractor.file}`);
 }
 
@@ -90,6 +103,12 @@ async function main(): Promise<void> {
       since: { type: "string" },
       source: { type: "string" },
       tool: { type: "string" },
+      id: { type: "string" },
+      seq: { type: "string" },
+      class: { type: "string" },
+      fields: { type: "string" },
+      limit: { type: "string" },
+      offset: { type: "string" },
       errors: { type: "boolean", default: false },
       full: { type: "boolean", default: false },
       config: { type: "string" },
@@ -134,9 +153,20 @@ async function main(): Promise<void> {
 
   const format = values.format ?? "jsonl";
   if (format !== "jsonl" && format !== "json" && format !== "tsv") usage();
-  if ((values.tool !== undefined || values.errors) && builtIn !== "calls") {
-    throw new Error("--tool and --errors filter the calls stream only");
+  if ((values.tool !== undefined || values.errors || values.id !== undefined || values.seq !== undefined || values.class !== undefined) && builtIn !== "calls") {
+    throw new Error("--tool, --errors, --id, --seq and --class filter the calls stream only");
   }
+  const limit = integerOption(values.limit, "--limit", 1);
+  let skip = integerOption(values.offset, "--offset", 0) ?? 0;
+  const seq = integerOption(values.seq, "--seq", 1);
+  const fields = values.fields?.split(",");
+  if (builtIn === undefined && (fields !== undefined || limit !== undefined || values.offset !== undefined)) throw new Error("--fields, --limit and --offset currently apply to built-in streams only.");
+  if (fields !== undefined) {
+    const declared = STREAMS[builtIn!].fields.map(field => field.name);
+    if (fields.some(name => !declared.includes(name)) || new Set(fields).size !== fields.length) throw new Error(`Invalid or duplicate --fields. Run dvdst schema ${builtIn}.`);
+    if (!values.full && fields.some(name => FULL_ONLY.includes(name))) throw new Error("Payload fields require --full.");
+  }
+  let emitted = 0;
 
   const paths = await resolveSessions({
     specs,
@@ -150,7 +180,7 @@ async function main(): Promise<void> {
   // Built-in rows stream out per session. Extractor rows are held to the end,
   // because a summarize step and undeclared TSV columns need all of them.
   const streaming = extractor === undefined && format !== "json";
-  const builtInColumns = builtIn === undefined ? [] : STREAMS[builtIn].fields.map((field) => field.name).filter((name) => !FULL_ONLY.includes(name));
+  const builtInColumns = fields ?? (builtIn === undefined ? [] : STREAMS[builtIn].fields.map((field) => field.name).filter((name) => !FULL_ONLY.includes(name)));
   const collected: Row[] = [];
   let failed = 0;
   if (streaming && format === "tsv") process.stdout.write(`${builtInColumns.join("\t")}\n`);
@@ -175,6 +205,16 @@ async function main(): Promise<void> {
     }
     if (values.tool !== undefined) rows = rows.filter((row) => row.tool === values.tool);
     if (values.errors) rows = rows.filter((row) => row.isError === true);
+    if (values.id !== undefined) rows = rows.filter(row => row.callId === values.id);
+    if (seq !== undefined) rows = rows.filter(row => row.seq === seq);
+    if (values.class !== undefined) rows = rows.filter(row => (row.classes as string[]).includes(values.class!));
+    if (builtIn !== undefined) {
+      const dropped = Math.min(skip, rows.length);
+      skip -= dropped;
+      rows = rows.slice(dropped, limit === undefined ? undefined : dropped + Math.max(0, limit - emitted));
+      emitted += rows.length;
+      if (fields !== undefined) rows = rows.map(row => Object.fromEntries(fields.map(name => [name, row[name] ?? null])));
+    }
     if (!streaming) collected.push(...rows);
     else if (format === "jsonl") for (const row of rows) process.stdout.write(`${JSON.stringify(row)}\n`);
     else for (const row of rows) process.stdout.write(`${builtInColumns.map((column) => tsvCell(row[column])).join("\t")}\n`);

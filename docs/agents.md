@@ -95,6 +95,10 @@ dvdst handoff "$SESSION" --format json
 | What commands/tests ran? | `dvdst commands "$SESSION" --class test --format json` | Command evidence |
 | What did it read/change? | `dvdst calls "$SESSION"` | `reads`, `mutates`, `opaque`, outcomes |
 | What is in a field? | `dvdst schema calls` | Field types and meanings |
+| Expand one call? | `dvdst call "$SESSION" --seq 42 --limit 2000` | Bounded arguments and result excerpts |
+| Find an earlier request or reply? | `dvdst search "$SESSION" --query 'local Open' --page` | Literal text hits with source references |
+| Inspect surrounding conversation? | `dvdst message --ref '<messageRef>'` | Exact message and bounded neighbors |
+| Browse user corrections? | `dvdst messages "$SESSION" --role user --limit 10` | Bounded user-message rows |
 | Where did tokens go? | `dvdst turns "$SESSION"` | Canonical assistant messages with recorded usage |
 | What context was recorded? | `dvdst context "$SESSION"` | Recorded system sections |
 | What should the next agent know? | `dvdst handoff "$SESSION" --format json` | Compact goals, files, commands, tests, commits |
@@ -121,6 +125,42 @@ associations, not proof that the agent followed a skill.
 Analysis caches derived rows automatically. Use `--no-cache` for one query or
 `DVDST_CACHE=off` to disable caching. Library/extractor users can start with
 `loadSessions`; see [extractors](extractors.md).
+
+For bounded exploration, built-in streams accept `--fields`, `--limit` (rows),
+and `--offset`. `calls` also supports `--id`, `--seq`, and `--class`. Filter
+first, then expand individual calls with `call` rather than requesting all
+payloads with `--full`:
+
+```bash
+dvdst calls "$SESSION" --class test --limit 10 --fields session,seq,line,isError,ref
+dvdst call "$SESSION" --seq 42 --limit 2000
+dvdst call --ref '<ref copied from calls>' --limit 2000
+```
+
+`call` defaults to 4096 Unicode characters per command/argument/result text
+field. Each slice reports `nextOffset`; continue with `--result-offset`,
+`--args-offset`, or `--command-offset`. References pin exact raw file contents:
+refresh `calls` after any file change, including appends. See
+[retrieval contracts](evidence-retrieval.md) and `dvdst schema call`.
+Offsets on row queries are ordinary pagination, not snapshot cursors.
+
+Use `messages`, `search`, then `message` for conversation exploration. Queries
+default to user/assistant text, 20 rows, and 240 characters per text field.
+`search --in commands|results|all` adds other evidence; matching is literal,
+with optional `--ignore-case`. `message` defaults to two neighbors per side
+and 2000 characters per message, with tool exchanges and call links. It can
+also open context directly from a call ref.
+
+```bash
+dvdst search "$SESSION" --query 'keep local Open' --role user --page
+dvdst message --ref '<messageRef copied from search>' --before 2 --after 2
+```
+
+`--page` returns JSON row counts, `nextOffset`, and source-completeness metadata.
+Failed sources still cause nonzero exit. A hit on merged Claude text cites the
+matching source block; the message may begin earlier. Codex `channel` identifies
+analysis versus final/commentary text. See [conversation contracts](conversation-exploration.md)
+and `schema messages`, `schema search`, `schema message`.
 
 ## Stored findings and optional staging
 
@@ -159,6 +199,11 @@ Claude/Codex live adapter or model reviewer is installed by DVDST.
   preserve byte ranges into their verbatim source snapshot.
 - Null cost, time, or outcome is unknown, not zero or successful. Findings are
   derived evidence; they do not establish correctness or product acceptance.
+- Handoff `validation` distinguishes attempted/completed/passed/failed/unfinished
+  tests and validation after the last potential mutation. Historical failures
+  remain counted after successful retries; inspect latest attempts. `stable`
+  describes limited validation evidence, not user acceptance. Opaque effects
+  prevent that outcome; parallel edit/test dispatch does not prove ordering.
 - Claude omits cost, request start times, and system prompt sections. Main
   transcript conversion excludes sidechain entries.
 - Codex turns are recorded assistant response items, not guaranteed provider
