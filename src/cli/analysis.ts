@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { parseArgs } from "node:util";
 import { extractorDirectories, findExtractor, listExtractorFiles, loadExtractorFile, type LoadedExtractor } from "../analysis/extractors.js";
 import { STREAMS, type FieldSpec, type Row, type StreamName } from "../analysis/rows.js";
@@ -6,13 +7,12 @@ import { cacheUsage, clearCache } from "../analysis/cache.js";
 import { loadSessionFile, loadSessionRows } from "../analysis/session.js";
 import { resolveSessions, type SourceSelection } from "../pi/resolve-sessions.js";
 import { guardStdout } from "./stdout.js";
-import { CALL_SCHEMA, integerOption } from "../analysis/read-call.js";
-import { MESSAGES_SCHEMA, MESSAGE_SCHEMA, SEARCH_SCHEMA } from "../analysis/conversation-schema.js";
+import { integerOption } from "../analysis/read-call.js";
+import { EXPLORATION_SCHEMAS } from "../analysis/schemas.js";
 
 guardStdout();
 
 const STREAM_NAMES = Object.keys(STREAMS) as StreamName[];
-const EXPLORATION_SCHEMAS = { call: CALL_SCHEMA, messages: MESSAGES_SCHEMA, message: MESSAGE_SCHEMA, search: SEARCH_SCHEMA };
 /** Fields that only --full adds. They are free-form, so they stay out of TSV. */
 const FULL_ONLY = ["args", "resultText", "text"];
 
@@ -96,27 +96,7 @@ async function main(): Promise<void> {
   if (subcommand === undefined || subcommand === "--help" || subcommand === "-h") usage(subcommand === undefined ? 2 : 0);
   const { values, positionals } = parseArgs({
     args: process.argv.slice(3),
-    options: {
-      root: { type: "string" },
-      project: { type: "string" },
-      last: { type: "string" },
-      since: { type: "string" },
-      source: { type: "string" },
-      tool: { type: "string" },
-      id: { type: "string" },
-      seq: { type: "string" },
-      class: { type: "string" },
-      fields: { type: "string" },
-      limit: { type: "string" },
-      offset: { type: "string" },
-      errors: { type: "boolean", default: false },
-      full: { type: "boolean", default: false },
-      config: { type: "string" },
-      "no-cache": { type: "boolean", default: false },
-      clear: { type: "boolean", default: false },
-      format: { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.analysis),
     strict: true,
     allowPositionals: true,
   });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { artifactsAreCurrent, extractArtifacts } from "../artifacts/extract.js";
@@ -41,13 +42,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "events" ? process.argv.slice(3) : process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args,
-    options: {
-      store: { type: "string", short: "s" },
-      session: { type: "string" },
-      snapshot: { type: "string" },
-      config: { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.events),
     strict: true,
     allowPositionals: true,
   });

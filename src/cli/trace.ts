@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { resolveSession } from "../pi/resolve-sessions.js";
@@ -24,11 +25,7 @@ async function main(): Promise<void> {
   for (let index = 4; index < process.argv.length; index += 1) filtered.push(process.argv[index]!);
   const { values } = parseArgs({
     args: filtered,
-    options: {
-      id: { type: "string", short: "i" },
-      format: { type: "string", default: "text" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.trace),
     strict: true,
     allowPositionals: false,
   });

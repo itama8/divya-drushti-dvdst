@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -160,16 +161,7 @@ async function main(): Promise<void> {
   for (let index = 3; index < process.argv.length; index += 1) filtered.push(process.argv[index]!);
   const { values, positionals } = parseArgs({
     args: filtered,
-    options: {
-      path: { type: "string" },
-      class: { type: "string" },
-      view: { type: "string", default: "invocations" },
-      store: { type: "string", short: "s" },
-      session: { type: "string" },
-      snapshot: { type: "string" },
-      format: { type: "string", default: "tsv" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.records),
     strict: true,
     allowPositionals: true,
   });

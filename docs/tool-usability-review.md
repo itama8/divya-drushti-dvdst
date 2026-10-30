@@ -8,9 +8,10 @@ expansion, snapshot-pinned call references, generic call/record trace lookup,
 and ordered handoff validation. See [retrieval contracts](evidence-retrieval.md).
 The second follow-up adds message listing, literal message/command/result
 search, bounded neighborhoods, and conversation-query page/completeness
-metadata. See [conversation contracts](conversation-exploration.md). The shared
-capability catalog and completeness metadata for older analysis commands remain
-proposed work below.
+metadata. See [conversation contracts](conversation-exploration.md). The third
+follow-up adds a shared built-in command catalog and executable option contracts;
+see [command discovery](command-discovery.md). Legacy output field schemas and
+completeness metadata for older analysis commands remain further work below.
 
 ## Product boundary
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
@@ -17,18 +18,7 @@ function usage(): never {
 const stripped = process.argv[2] === "handoff-devlog" ? process.argv.slice(3) : process.argv.slice(2);
 const { values, positionals } = parseArgs({
   args: stripped,
-  options: {
-    session: { type: "string", short: "s" },
-    devlog: { type: "string", short: "d" },
-    out: { type: "string", short: "o" },
-    project: { type: "string", default: "omakase-v2" },
-    phase: { type: "string", default: "docs-spine" },
-    checkpoint: { type: "string", default: "auto-derived" },
-    focus: { type: "string", default: "Auto-derived handoff bundle" },
-    date: { type: "string", default: new Date().toISOString().slice(0, 10) },
-    "session-num": { type: "string", default: "1" },
-    help: { type: "boolean", short: "h" },
-  },
+  options: parserOptions(CLI_OPTIONS.handoffDevlog),
   strict: true,
   allowPositionals: true,
 });

@@ -1,14 +1,11 @@
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { parseArgs } from "node:util";
 import { integerOption, readCall } from "../analysis/read-call.js";
 import { guardStdout } from "./stdout.js";
 
 guardStdout();
 try {
-  const { values, positionals } = parseArgs({ args: process.argv.slice(3), allowPositionals: true, options: {
-    id: { type: "string" }, seq: { type: "string" }, ref: { type: "string" }, limit: { type: "string" },
-    "args-offset": { type: "string" }, "result-offset": { type: "string" }, "command-offset": { type: "string" },
-    help: { type: "boolean", short: "h" },
-  } });
+  const { values, positionals } = parseArgs({ args: process.argv.slice(3), allowPositionals: true, options: parserOptions(CLI_OPTIONS.call) });
   if (values.help) {
     process.stderr.write("Usage: dvdst call <session> <--id ID | --seq N> [--limit chars]\n       dvdst call --ref <ref> [--limit chars] [--args-offset N] [--result-offset N] [--command-offset N]\nJSON output; default 4096 Unicode characters per text field; maximum 65536. Run dvdst schema call for output fields.\n");
   } else {

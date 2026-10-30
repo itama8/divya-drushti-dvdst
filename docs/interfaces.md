@@ -19,6 +19,8 @@ Pi, Claude Code, and Codex transcripts feed a common row interface:
 - `message`: exact message and surrounding conversation, by sequence or snapshot reference
 - `context`: recorded system prompt sections and sizes
 - `schema`: field descriptions for built-in streams and project extractors
+- `capabilities`: built-in command catalog; targeted descriptors include typed
+  inputs, shared options/output schemas, source coverage, effects, and constraints
 - `cache`: inspect or clear the derived row cache
 
 ```bash
@@ -151,12 +153,20 @@ changes. See [live streams](live-streams.md).
 
 ## Programmatic and agent interfaces
 
+`capabilities [command] [--group ...]` defaults to machine-readable JSON.
+It uses the dispatcher's command registry and the option definitions consumed
+by each CLI parser. Shared field schemas match `schema`; undeclared legacy
+output schemas remain null. Catalog lookup does not discover/import project
+extractors. See [command discovery](command-discovery.md).
+
 - CLI: the `dvdst` binary, or `npm run --silent dvdst -- <command>` in this checkout
 - Library: TypeScript exports from `dvdst`, including `loadSession`,
   `loadSessions`, row derivation, session resolution, bash effects, command
   classification, configuration, and extractor loading, for scripts run with tsx
 - Conversation library: `loadConversation`, `conversationFromSession`,
   `listMessages`, `searchConversation`, and `readMessage`, shared by the CLI
+- Discovery library: `getCapabilities(command?, group?)` returns copied command
+  descriptors, without inspecting or executing project code
 - Project extractors: `.dvdst/extractors/` modules with `derive(session)` and
   optional `summarize(rows)`, run as `dvdst <name>` or `dvdst rows <name|file>`
 - Project rules: `.dvdst/config.json` for command classes and finding exclusions

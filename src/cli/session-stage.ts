@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -33,11 +34,7 @@ async function findTranscript(root: string, agent: string, session: string): Pro
 async function main(): Promise<void> {
   const { values } = parseArgs({
     args: process.argv[2] === "session-stage" ? process.argv.slice(3) : process.argv.slice(2),
-    options: {
-      agent: { type: "string" }, session: { type: "string" }, "session-file": { type: "string" },
-      repository: { type: "string" }, manifest: { type: "string" }, after: { type: "string" },
-      "dry-run": { type: "boolean" }, list: { type: "boolean" }, help: { type: "boolean", short: "h" },
-    }, strict: true,
+    options: parserOptions(CLI_OPTIONS.sessionStage), strict: true,
   });
   if (values.help) {
     console.log("Usage: dvdst session-stage --agent claude|codex [--session <id> | --session-file <file>] [--repository <dir>] [--manifest <file>] [--after <result-event-id>] [--dry-run | --list]");

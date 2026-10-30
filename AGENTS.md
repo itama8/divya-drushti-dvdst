@@ -9,6 +9,7 @@ From this checkout, install with `npm ci --include=dev` (Node 22+) if needed.
 No build or model credentials are required. Start with:
 
 ```bash
+node bin/dvdst.mjs capabilities --group exploration
 node bin/dvdst.mjs schema calls
 node bin/dvdst.mjs overview test/fixtures/claude-session.jsonl
 ```
@@ -24,6 +25,9 @@ while retaining the caller's working directory for project selection.
   analysis supports `--source pi|claude|codex|all`; Pi remains the default.
 - Start with `overview`, consult `schema`, then query focused `calls` or `turns`.
   Add `--full` only when arguments or result text are needed.
+- Use `capabilities <command>` to discover typed arguments, output fields where
+  declared, source support, and conditional side effects without loading project
+  extractors. For conversation lookup, use `search`, then `message`, then `call`.
 - Analysis reads transcripts directly. `events <file> --store <directory>`
   creates stored evidence and findings when that workflow is needed.
 - Cite `session` and source `line`. Null outcome or cost means unknown; inferred

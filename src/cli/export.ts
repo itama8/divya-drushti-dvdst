@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
@@ -18,15 +19,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "export" ? process.argv.slice(3) : process.argv.slice(2);
   const { values } = parseArgs({
     args,
-    options: {
-      input: { type: "string", short: "i" },
-      store: { type: "string", short: "s" },
-      source: { type: "string" },
-      session: { type: "string" },
-      snapshot: { type: "string" },
-      format: { type: "string", short: "f" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.export),
     strict: true,
   });
   if (values.help) usage(0);

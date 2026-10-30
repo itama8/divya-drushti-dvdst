@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { parseArgs } from "node:util";
 import { guardStdout } from "./stdout.js";
 import { LiveEventError, stageChanges } from "../stage/stage.js";
@@ -19,16 +20,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "stage" ? process.argv.slice(3) : process.argv.slice(2);
   const { values } = parseArgs({
     args,
-    options: {
-      input: { type: "string", short: "i" },
-      "session-file": { type: "string" },
-      manifest: { type: "string" },
-      cwd: { type: "string" },
-      session: { type: "string" },
-      after: { type: "string" },
-      "dry-run": { type: "boolean" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.stage),
     strict: true,
   });
   if (values.help) usage(0);

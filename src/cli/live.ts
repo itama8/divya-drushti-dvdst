@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { createReadStream } from "node:fs";
 import { parseArgs } from "node:util";
@@ -17,10 +18,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "live" ? process.argv.slice(3) : process.argv.slice(2);
   const { values } = parseArgs({
     args,
-    options: {
-      input: { type: "string", short: "i" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.live),
     strict: true,
   });
   if (values.help) usage(0);

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { readLiveSnapshot } from "../store/read-live.js";
@@ -15,14 +16,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "timeline" ? process.argv.slice(3) : process.argv.slice(2);
   const { values } = parseArgs({
     args,
-    options: {
-      store: { type: "string", short: "s" },
-      source: { type: "string" },
-      session: { type: "string" },
-      snapshot: { type: "string" },
-      kind: { type: "string", short: "k" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.timeline),
     strict: true,
   });
   if (values.help) usage(0);

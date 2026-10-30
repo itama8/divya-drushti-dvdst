@@ -88,6 +88,12 @@ dvdst handoff "$SESSION" --format json
 
 ## Choose the smallest useful query
 
+Use `dvdst capabilities --group exploration` to list tools and
+`dvdst capabilities <command>` for typed inputs, defaults, output schemas where
+declared, source support, and conditional effects. It never loads project
+extractors. `schema <command>` still provides focused field descriptions.
+See [command discovery](command-discovery.md).
+
 | Question | Command | Output |
 | --- | --- | --- |
 | Which sessions matter? | `dvdst overview --source all --last 10` | One row per session |

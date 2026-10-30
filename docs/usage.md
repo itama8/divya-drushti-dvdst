@@ -219,6 +219,10 @@ neighbors. Conversation queries share analysis session selection and offer
 `--page` completeness/continuation metadata. See
 [conversation exploration](conversation-exploration.md).
 
+Discover the available tools with `dvdst capabilities`, narrow by
+`--group exploration`, or request one command's detailed argument/output
+contract with `dvdst capabilities search`. See [command discovery](command-discovery.md).
+
 dvdst reads sessions of all three agents and tells them apart by content. Rows
 have one shape across agents, and `overview` rows name the agent in `source`.
 

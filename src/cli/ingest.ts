@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
@@ -56,11 +57,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "ingest" ? process.argv.slice(3) : process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args,
-    options: {
-      live: { type: "string" },
-      store: { type: "string", short: "s" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.ingest),
     strict: true,
     allowPositionals: true,
   });

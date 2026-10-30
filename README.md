@@ -133,6 +133,19 @@ supplied rollout segment; verified pagination joining remains staging-only.
 
 ### Query sessions as rows
 
+Discover tools directly before choosing a query:
+
+```bash
+dvdst capabilities --group exploration
+dvdst capabilities search
+```
+
+The catalog shares command/option definitions with the CLI. Detailed entries
+describe typed inputs, outputs, source support, defaults, constraints, and
+conditional effects. Discovery does not load project extractors. Legacy outputs
+without a field schema are explicitly marked unknown. See
+[command discovery](docs/command-discovery.md).
+
 Four commands read session files directly, with no ingest step, and write
 JSONL: `overview` (one row per session), `turns` (one per canonical assistant
 message, with recorded tokens and cost), `calls` (one per tool call joined to its result), and
@@ -265,6 +278,7 @@ evidence limits and watcher behavior.
 - [Agent guide](docs/agents.md) - setup, session selection, machine-readable workflows, and limits.
 - [Capabilities and interfaces](docs/interfaces.md) - source support, commands, library, and Omakase integrations.
 - [Conversation exploration](docs/conversation-exploration.md) - message search, surrounding conversation, and call links.
+- [Command discovery](docs/command-discovery.md) - machine-readable command catalog and shared argument contracts.
 - `docs/usage.md` - command reference with real Omakase paths.
 - `docs/extractors.md` - project extractors and the script library.
 - `docs/events.md` - event and finding schema, and per-finding jq recipes.

@@ -1,3 +1,4 @@
+import { CLI_OPTIONS, parserOptions, CONVERSATION_ALLOWED } from "./command-options.js";
 import { parseArgs } from "node:util";
 import { loadConversation, listMessages, readMessage, searchConversation, validateRoles, type RoleSelection, type SearchScope } from "../analysis/conversation.js";
 import { MESSAGES_SCHEMA, SEARCH_SCHEMA } from "../analysis/conversation-schema.js";
@@ -27,17 +28,9 @@ function cell(value: unknown): string {
 async function main() {
   const command = process.argv[2];
   if (!["messages", "search", "message"].includes(command ?? "")) throw new Error("Expected messages, search, or message.");
-  const { values, positionals } = parseArgs({ args: process.argv.slice(3), allowPositionals: true, options: {
-    source: { type: "string" }, project: { type: "string" }, root: { type: "string" }, last: { type: "string" }, since: { type: "string" },
-    role: { type: "string" }, query: { type: "string" }, in: { type: "string" }, "ignore-case": { type: "boolean" },
-    limit: { type: "string" }, offset: { type: "string" }, "text-limit": { type: "string" }, fields: { type: "string" }, format: { type: "string" }, page: { type: "boolean" },
-    ref: { type: "string" }, seq: { type: "string" }, before: { type: "string" }, after: { type: "string" }, "text-offset": { type: "string" },
-    help: { type: "boolean", short: "h" },
-  } });
+  const { values, positionals } = parseArgs({ args: process.argv.slice(3), allowPositionals: true, options: parserOptions(CLI_OPTIONS.conversation) });
   if (values.help) { help(); return; }
-  const allowed = new Set(command === "message"
-    ? ["ref", "seq", "before", "after", "limit", "text-offset", "format"]
-    : ["source", "project", "root", "last", "since", "role", "limit", "offset", "text-limit", "fields", "format", "page", ...(command === "search" ? ["query", "in", "ignore-case"] : [])]);
+  const allowed = new Set<string>(CONVERSATION_ALLOWED[command as keyof typeof CONVERSATION_ALLOWED]);
   for (const name of Object.keys(values)) if (!allowed.has(name)) throw new Error(`--${name} does not apply to ${command}. Run dvdst ${command} --help.`);
 
   if (command === "message") {

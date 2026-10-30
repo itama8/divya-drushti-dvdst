@@ -8,6 +8,7 @@
  *   }
  */
 export { loadSession, loadSessionFile, loadSessionRows, loadSessions, type LoadSessionOptions, type SessionData } from "./analysis/session.js";
+export { getCapabilities } from "./capabilities.js";
 export { readCall, sliceText, CALL_SCHEMA, type ReadCallOptions, type TextSlice } from "./analysis/read-call.js";
 export { loadConversation, conversationFromSession, listMessages, searchConversation, readMessage, type Conversation, type ConversationMessage, type ConversationQueryOptions, type EvidencePage, type MessageMetadata, type MessageRow, type ReadMessageOptions, type RoleSelection, type SearchHit, type SearchOptions, type SearchScope } from "./analysis/conversation.js";
 export { MESSAGES_SCHEMA, MESSAGE_SCHEMA, SEARCH_SCHEMA } from "./analysis/conversation-schema.js";

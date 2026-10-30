@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -37,11 +38,7 @@ async function main(): Promise<void> {
   const stripped = process.argv[2] === "cleanup" ? process.argv.slice(3) : process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args: stripped,
-    options: {
-      store: { type: "string", short: "s" },
-      yes: { type: "boolean", short: "y" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.cleanup),
     strict: true,
     allowPositionals: true,
   });

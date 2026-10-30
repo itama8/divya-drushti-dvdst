@@ -21,6 +21,12 @@ or ingest step is required for analysis. For full setup and recipes, read
 
 ## 1. Pick the stream
 
+Use `dvdst capabilities --group exploration` to discover built-in operations,
+then `dvdst capabilities search` (or another command) for typed inputs, defaults,
+source support, conditional effects, and output schemas where declared. This
+lookup never loads project extractors. A null legacy output schema means its
+fields are not declared; consult that command's docs instead of guessing.
+
 | command | one row per | use it for |
 | --- | --- | --- |
 | `dvdst overview` | session | time, tokens, cost, tool totals, first prompt |
@@ -30,8 +36,8 @@ or ingest step is required for analysis. For full setup and recipes, read
 | `dvdst messages` | canonical message | browse prompts/replies with bounded text and tool links |
 | `dvdst search` | matching message/command/result | find earlier requests, corrections, decisions, or failures |
 
-Run `dvdst schema calls` before you write a filter. It prints every field with
-its type and meaning. Do not guess field names.
+Inspect `dvdst schema calls` or its capability descriptor before composing a
+filter. Both share the field contract. Do not guess field names.
 
 ## 2. Pick the sessions
 
