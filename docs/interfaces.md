@@ -12,8 +12,16 @@ Pi, Claude Code, and Codex transcripts feed a common row interface:
 - `turns`: model requests, tokens, context use, and recorded timing
 - `calls`: tool calls joined to results, failures, duration, output size,
   truncation, command classes, inferred bash file effects, and repetition
+- `call`: exact call retrieval by file and ID/sequence, or a snapshot-pinned
+  reference, with independently bounded arguments, command, and result text
+- `messages`: role-filtered canonical message rows with bounded text and call links
+- `search`: literal search over message text, shell commands, and tool results
+- `message`: exact message and surrounding conversation, by sequence or snapshot reference
 - `context`: recorded system prompt sections and sizes
+- `files`, `commands`, `skills --contract exploration`: bounded target/attempt/skill queries (pass the flag to each command)
 - `schema`: field descriptions for built-in streams and project extractors
+- `capabilities`: built-in command catalog; targeted descriptors include typed
+  inputs, shared options/output schemas, source coverage, effects, and constraints
 - `cache`: inspect or clear the derived row cache
 
 ```bash
@@ -26,6 +34,21 @@ Rows support JSONL, JSON, and TSV. `--full` includes arguments and result text.
 Session selection accepts files, IDs, prefixes, and `latest`, with project,
 root, time, and count filters. `--source all` means Pi, Claude Code, and Codex.
 The default source for recent-session selection is Pi.
+
+Built-in streams also accept `--fields`, `--limit`, and `--offset`; `calls`
+adds `--id`, `--seq`, and `--class`. `calls.ref` identifies the exact file,
+raw snapshot, call ID, and source line. Any file change invalidates it.
+`schema call` describes the bounded retrieval output. See
+[exact call retrieval](evidence-retrieval.md) for formats, offsets, and limits.
+
+`messages` and `search` share analysis session selection and JSONL/JSON/TSV
+formats, defaulting to 20 rows and 240-character text slices. `message` returns
+JSON with a bounded neighborhood, text continuation, and omitted-neighbor refs;
+it can also anchor from a call ref. Conversation queries offer `--page` counts,
+continuation, and failed-source metadata. Search cites matched Claude text/call
+blocks, not only their merged message's first line. Codex channels are retained.
+Thinking/reasoning blocks, binary payloads, excluded entries, and missing history
+are not invented as message text. See [conversation exploration](conversation-exploration.md).
 
 Claude conversion normalizes core tools to `bash`, `read`, `edit`, and `write`.
 It excludes sidechain entries. Missing cost and generation timing stay null,
@@ -59,8 +82,31 @@ dvdst files /path/to/claude-transcript.jsonl --format json
 dvdst handoff /path/to/claude-transcript.jsonl
 ```
 
-These commands use a direct bundle path. Their file summaries do not include
-all inferred bash reads available in call rows and stored artifacts. Codex patch paths are included in direct file summaries.
+Legacy direct inspection/closeout uses a bundle path. Its file summaries cover
+explicit file tools and Codex patch paths; shell effects live in call rows and
+the separate stored bash-effect artifact.
+
+`files`, `commands`, and `skills --contract exploration` share declared schemas
+with `schema` and `capabilities`, analysis transcript selection, projection,
+limits, and JSONL/JSON/TSV output. Pass the contract flag to each command. They
+default to 20 rows and bounded command text, expose source/segment/fingerprint
+and raw line/byte provenance, and link to `call`/`message`. `--page` reports counts,
+continuation, and source failures, with nonzero exit for partial reads. File rows
+separate explicit targets from inferred shell effects and recorded completion;
+skills preserve failed/unconfirmed loads and attribution basis. Stored selection
+requires `--store`/`--session`, rejects transcript discovery flags, and reads the
+raw snapshot without derived writes. Legacy output remains the default. See
+[inspection contracts](inspection-queries.md) for filters and migration.
+
+`trace` recognizes arbitrary tool calls and canonical record IDs in addition
+to its existing associations. JSON reports `found`, source locations, and
+call references; missing IDs exit nonzero in all formats. Probe and handoff
+schemas are now `0.2.0-probe` and `0.2.0-handoff`. Their `validation` observations
+distinguish unfinished tests, successful exact-argument retries, and tests
+started after the last potential mutation settled. Historical failure totals
+remain available. A handoff can report `unfinished` or `validation-stale`;
+opaque effects prevent `stable`. `tests.ran` requires a completed test result.
+Devlog generation preserves `stable` rather than upgrading it to acceptance.
 
 ## Recorded-change staging
 
@@ -121,10 +167,20 @@ changes. See [live streams](live-streams.md).
 
 ## Programmatic and agent interfaces
 
+`capabilities [command] [--group ...]` defaults to machine-readable JSON.
+It uses the dispatcher's command registry and the option definitions consumed
+by each CLI parser. Shared field schemas match `schema`; inspection schemas explicitly apply to
+`--contract exploration`. Other undeclared output schemas remain null. Catalog lookup does not discover/import project
+extractors. See [command discovery](command-discovery.md).
+
 - CLI: the `dvdst` binary, or `npm run --silent dvdst -- <command>` in this checkout
 - Library: TypeScript exports from `dvdst`, including `loadSession`,
   `loadSessions`, row derivation, session resolution, bash effects, command
   classification, configuration, and extractor loading, for scripts run with tsx
+- Conversation library: `loadConversation`, `conversationFromSession`,
+  `listMessages`, `searchConversation`, and `readMessage`, shared by the CLI
+- Discovery library: `getCapabilities(command?, group?)` returns copied command
+  descriptors, without inspecting or executing project code
 - Project extractors: `.dvdst/extractors/` modules with `derive(session)` and
   optional `summarize(rows)`, run as `dvdst <name>` or `dvdst rows <name|file>`
 - Project rules: `.dvdst/config.json` for command classes and finding exclusions

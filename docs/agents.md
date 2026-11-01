@@ -77,9 +77,10 @@ arbitrary archive. `DVDST_SESSION_ROOT` also overrides the default root.
 The separate `sessions <directory>` command recognizes Pi filenames only.
 
 Source selection flags belong to analysis commands (`overview`, `turns`,
-`calls`, `context`, and project extractors). For `handoff`, `files`, or stored
-commands, pass the exact path returned by `overview`; those commands do not
-accept `--source`. For example, after verifying the overview:
+`calls`, `context`, conversation queries, inspection with `--contract exploration`,
+and project extractors). For `handoff` and legacy inspection, pass the exact
+path returned by `overview`. Stored inspection instead requires
+`--store`/`--session`; it does not accept `--source`. For example, after verifying the overview:
 
 ```bash
 SESSION=$(dvdst overview latest --source codex | jq -r .path)
@@ -88,6 +89,12 @@ dvdst handoff "$SESSION" --format json
 
 ## Choose the smallest useful query
 
+Use `dvdst capabilities --group exploration` to list tools and
+`dvdst capabilities <command>` for typed inputs, defaults, output schemas where
+declared, source support, and conditional effects. It never loads project
+extractors. `schema <command>` still provides focused field descriptions.
+See [command discovery](command-discovery.md).
+
 | Question | Command | Output |
 | --- | --- | --- |
 | Which sessions matter? | `dvdst overview --source all --last 10` | One row per session |
@@ -95,6 +102,10 @@ dvdst handoff "$SESSION" --format json
 | What commands/tests ran? | `dvdst commands "$SESSION" --class test --format json` | Command evidence |
 | What did it read/change? | `dvdst calls "$SESSION"` | `reads`, `mutates`, `opaque`, outcomes |
 | What is in a field? | `dvdst schema calls` | Field types and meanings |
+| Expand one call? | `dvdst call "$SESSION" --seq 42 --limit 2000` | Bounded arguments and result excerpts |
+| Find an earlier request or reply? | `dvdst search "$SESSION" --query 'local Open' --page` | Literal text hits with source references |
+| Inspect surrounding conversation? | `dvdst message --ref '<messageRef>'` | Exact message and bounded neighbors |
+| Browse user corrections? | `dvdst messages "$SESSION" --role user --limit 10` | Bounded user-message rows |
 | Where did tokens go? | `dvdst turns "$SESSION"` | Canonical assistant messages with recorded usage |
 | What context was recorded? | `dvdst context "$SESSION"` | Recorded system sections |
 | What should the next agent know? | `dvdst handoff "$SESSION" --format json` | Compact goals, files, commands, tests, commits |
@@ -113,7 +124,7 @@ dvdst calls "$SESSION" \
   | jq -c 'select((.mutates | length) > 0) | {session, line, mutates, isError}'
 ```
 
-`calls` file effects include inferred shell reads/writes. Direct `files` and
+`calls` file effects include inferred shell reads/writes. Legacy direct `files` and
 handoff summaries include explicit file tools and Codex patch paths; they do
 not enumerate every shell file effect. Skill attribution describes evidence
 associations, not proof that the agent followed a skill.
@@ -121,6 +132,65 @@ associations, not proof that the agent followed a skill.
 Analysis caches derived rows automatically. Use `--no-cache` for one query or
 `DVDST_CACHE=off` to disable caching. Library/extractor users can start with
 `loadSessions`; see [extractors](extractors.md).
+
+For bounded exploration, built-in streams accept `--fields`, `--limit` (rows),
+and `--offset`. `calls` also supports `--id`, `--seq`, and `--class`. Filter
+first, then expand individual calls with `call` rather than requesting all
+payloads with `--full`:
+
+```bash
+dvdst calls "$SESSION" --class test --limit 10 --fields session,seq,line,isError,ref
+dvdst call "$SESSION" --seq 42 --limit 2000
+dvdst call --ref '<ref copied from calls>' --limit 2000
+```
+
+`call` defaults to 4096 Unicode characters per command/argument/result text
+field. Each slice reports `nextOffset`; continue with `--result-offset`,
+`--args-offset`, or `--command-offset`. References pin exact raw file contents:
+refresh `calls` after any file change, including appends. See
+[retrieval contracts](evidence-retrieval.md) and `dvdst schema call`.
+Offsets on row queries are ordinary pagination, not snapshot cursors.
+
+Use `messages`, `search`, then `message` for conversation exploration. Queries
+default to user/assistant text, 20 rows, and 240 characters per text field.
+`search --in commands|results|all` adds other evidence; matching is literal,
+with optional `--ignore-case`. `message` defaults to two neighbors per side
+and 2000 characters per message, with tool exchanges and call links. It can
+also open context directly from a call ref.
+
+```bash
+dvdst search "$SESSION" --query 'keep local Open' --role user --page
+dvdst message --ref '<messageRef copied from search>' --before 2 --after 2
+```
+
+`--page` returns JSON row counts, `nextOffset`, and source-completeness metadata.
+Failed sources still cause nonzero exit. A hit on merged Claude text cites the
+matching source block; the message may begin earlier. Codex `channel` identifies
+analysis versus final/commentary text. See [conversation contracts](conversation-exploration.md)
+and `schema messages`, `schema search`, `schema message`.
+
+## File, command, and skill queries
+
+Use `capabilities files|commands|skills` and the matching `schema` target.
+Pass `--contract exploration` for shared selection, output, and evidence fields:
+
+```bash
+dvdst files "$SESSION" --contract exploration --basis explicit-file-tool --page
+dvdst commands "$SESSION" --contract exploration --outcome unfinished --page
+dvdst skills "$SESSION" --contract exploration --load-status unconfirmed --page
+```
+
+These queries accept source/project/root/time/session-count selection, `--fields`,
+`--limit`, `--offset`, and JSONL/JSON/TSV. Defaults are 20 rows and 240-character
+command prefixes. `--page` reports counts, continuation, and source failures;
+partial reads exit nonzero. Keep session/segment, source line, and references.
+Expand `ref` with its `refKind` reader or `messageRef` with `message`.
+
+Stored selection instead requires `--store`/`--session` and optional `--snapshot`;
+it rejects discovery flags and positionals. Exploration reads raw snapshots
+without store writes. Legacy inspection remains the default with older shapes
+and TSV output. See [inspection queries](inspection-queries.md) for compatibility,
+filters, observed/inferred targets, unfinished outcomes, and skill associations.
 
 ## Stored findings and optional staging
 
@@ -159,6 +229,11 @@ Claude/Codex live adapter or model reviewer is installed by DVDST.
   preserve byte ranges into their verbatim source snapshot.
 - Null cost, time, or outcome is unknown, not zero or successful. Findings are
   derived evidence; they do not establish correctness or product acceptance.
+- Handoff `validation` distinguishes attempted/completed/passed/failed/unfinished
+  tests and validation after the last potential mutation. Historical failures
+  remain counted after successful retries; inspect latest attempts. `stable`
+  describes limited validation evidence, not user acceptance. Opaque effects
+  prevent that outcome; parallel edit/test dispatch does not prove ordering.
 - Claude omits cost, request start times, and system prompt sections. Main
   transcript conversion excludes sidechain entries.
 - Codex turns are recorded assistant response items, not guaranteed provider

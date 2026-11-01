@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { buildHandoffSummary, handoffToText } from "../handoff/summary.js";
@@ -16,12 +17,7 @@ function usage(): never {
 const stripped = process.argv[2] === "handoff" ? process.argv.slice(3) : process.argv.slice(2);
 const { values, positionals } = parseArgs({
   args: stripped,
-  options: {
-    session: { type: "string", short: "s" },
-    devlog: { type: "string", short: "d" },
-    format: { type: "string", default: "text" },
-    help: { type: "boolean", short: "h" },
-  },
+  options: parserOptions(CLI_OPTIONS.handoff),
   strict: true,
   allowPositionals: true,
 });

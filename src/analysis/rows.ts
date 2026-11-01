@@ -3,6 +3,7 @@ import { parseBashEffects } from "../pi/bash-effects.js";
 import { classifyCommand, type CommandClassRule } from "../pi/classify-commands.js";
 import { isObject, type SourceRecord } from "../pi/read-jsonl.js";
 import { sessionIdFromFilename } from "../pi/sessions.js";
+import { encodeCallReference } from "./call-reference.js";
 
 export const ROWS_SCHEMA_VERSION = 1;
 
@@ -102,6 +103,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("line", "number", "Line of the assistant message in the session file."),
       field("resultLine", "number|null", "Line of the tool result. Null when the session has no result for the call."),
       field("callId", "string", "Tool call id. Joins to toolCallId in the store streams."),
+      field("ref", "string|null", "Exact call reference for dvdst call --ref. Pins the file and raw snapshot; refresh after any file change. Null for rows derived without a fingerprint."),
       field("tool", "string", "Tool name. The core tools are bash, read, edit, and write for every source; other tools keep the name their agent gives them."),
       field("model", "string|null", "Model that made the call."),
       field("path", "string|null", "The path argument. Relative to the session cwd when inside it."),
@@ -204,7 +206,7 @@ function relativeToCwd(path: string, cwd: string | null): string {
  * and source lines, so a consumer can concatenate many sessions and still
  * trace any row back to the entry it came from.
  */
-export function deriveRows(records: SourceRecord[], sourcePath: string, options: { full?: boolean; commandClasses?: CommandClassRule[] } = {}): SessionRows {
+export function deriveRows(records: SourceRecord[], sourcePath: string, options: { full?: boolean; commandClasses?: CommandClassRule[]; fingerprint?: string } = {}): SessionRows {
   const full = options.full === true;
   const commandClasses = options.commandClasses ?? [];
   const path = resolve(sourcePath);
@@ -312,6 +314,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
           line,
           resultLine: null,
           callId: block.id,
+          ref: options.fingerprint === undefined ? null : encodeCallReference({ v: 1, path: resolve(sourcePath), fingerprint: options.fingerprint, callId: block.id as string, line }),
           tool: block.name,
           model,
           path,

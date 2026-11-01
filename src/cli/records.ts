@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { inspection } from "./inspection.js";
+import { COMMANDS } from "./commands.js";
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -12,15 +15,19 @@ import { readSessionSnapshot } from "../store/read-session.js";
 
 guardStdout();
 
-const DEFAULT_STORE = ".dvdst/store";
-
-function usage(): never {
-  console.error("Usage: dvdst files <session> [--path <substring>] [--format json|tsv]");
-  console.error("       dvdst commands <session> [--class <test|typecheck|build|lint|dependency>] [--format json|tsv]");
-  console.error("       dvdst skills <session> [--format json|tsv]");
-  console.error("       dvdst <files|commands|skills> --store <dir> --session <id> [--snapshot <sha256>] [--view invocations|spans|attributions]");
-  console.error('A session is a file, a session id or id prefix, or "latest". --view applies to skills in store mode.');
-  process.exit(2);
+function usage(code = 2): never {
+  const name = process.argv[2] ?? "files";
+  console.error(`Usage: dvdst ${name} [session...] --contract exploration [options]`);
+  console.error(`       dvdst ${name} --contract exploration --store <dir> --session <id> [--snapshot <sha256>] [options]`);
+  console.error("Exploration: analysis transcript selection, JSONL, 20 rows; commands use 240-character prefixes.");
+  console.error("--page implies JSON and reports counts, continuation, and source failures. Store selection rejects discovery flags.");
+  console.error("Without --contract exploration, legacy shapes, single-session selection, TSV default and unlimited output remain.");
+  console.error("Skill views work in both exploration selection modes; legacy --view applies only to stored skills.");
+  console.error(`Consult dvdst capabilities ${name} and dvdst schema ${name}. Options:`);
+  for (const [key, option] of Object.entries(COMMANDS[name]!.options)) {
+    console.error(`  --${key}${option.short === undefined ? "" : `, -${option.short}`} ${option.description}`);
+  }
+  process.exit(code);
 }
 
 function emitTsv(header: string[], rows: unknown[][]): void {
@@ -158,22 +165,21 @@ async function main(): Promise<void> {
   // Strip subcommand before handing to parseArgs so positionals don't trip strict mode.
   const filtered: string[] = [];
   for (let index = 3; index < process.argv.length; index += 1) filtered.push(process.argv[index]!);
-  const { values, positionals } = parseArgs({
+  const { values, positionals, tokens } = parseArgs({
+    tokens: true,
     args: filtered,
-    options: {
-      path: { type: "string" },
-      class: { type: "string" },
-      view: { type: "string", default: "invocations" },
-      store: { type: "string", short: "s" },
-      session: { type: "string" },
-      snapshot: { type: "string" },
-      format: { type: "string", default: "tsv" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.records),
     strict: true,
     allowPositionals: true,
   });
-  if (values.help) usage();
+  if (values.help) usage(0);
+  for (const token of tokens) if (token.kind === "option" && !Object.hasOwn(COMMANDS[subcommand]!.options, token.name)) throw new Error(`--${token.name} does not apply to ${subcommand}.`);
+  if (values.contract !== undefined && !["legacy", "exploration"].includes(values.contract)) throw new Error("--contract must be legacy or exploration.");
+  if (values.contract === "exploration") { await inspection(subcommand, positionals, values); return; }
+  const legacyOptions = new Set(["contract", "path", "class", "view", "store", "session", "snapshot", "format", "help"]);
+  for (const token of tokens) if (token.kind === "option" && !legacyOptions.has(token.name)) throw new Error(`--${token.name} requires --contract exploration. Consult capabilities ${subcommand}.`);
+  if (positionals.length > 1) throw new Error("Legacy inspection accepts at most one session; use --contract exploration for multiple segments.");
+  if (values.format !== undefined && !["json", "tsv"].includes(values.format)) throw new Error("Legacy inspection supports json or tsv; use --contract exploration for jsonl.");
   const format = values.format === "json" ? "json" : "tsv";
   const storeMode = values.store !== undefined || values.session !== undefined || values.snapshot !== undefined;
   const sessionPath = positionals[0];

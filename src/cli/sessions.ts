@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { discoverSessions } from "../pi/sessions.js";
@@ -11,11 +12,7 @@ function usage(): never {
 }
 
 const { values } = parseArgs({
-  options: {
-    format: { type: "string", default: "tsv" },
-    limit: { type: "string" },
-    help: { type: "boolean", short: "h" },
-  },
+  options: parserOptions(CLI_OPTIONS.sessions),
   strict: true,
   allowPositionals: true,
 });

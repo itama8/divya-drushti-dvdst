@@ -1,4 +1,4 @@
-import { isObject, readJsonl, type SourceRecord } from "../pi/read-jsonl.js";
+import { isObject, readJsonlSnapshot, type SourceRecord } from "../pi/read-jsonl.js";
 import { claudeToCanonical, isClaudeEntry } from "./claude.js";
 import { codexToCanonical } from "./codex.js";
 
@@ -19,11 +19,11 @@ export function detectSource(records: SourceRecord[]): SessionSource {
  * `toolCall` blocks and `toolResult` messages. A Pi session already has that
  * shape and is returned as read.
  */
-export async function readSessionRecords(path: string): Promise<{ source: SessionSource; records: SourceRecord[]; lines: number }> {
-  const raw = await readJsonl(path);
+export async function readSessionRecords(path: string): Promise<{ source: SessionSource; records: SourceRecord[]; lines: number; fingerprint: string }> {
+  const { records: raw, fingerprint } = await readJsonlSnapshot(path);
   const source = detectSource(raw);
   // `lines` counts the entries of the file itself, which a conversion may merge or drop.
-  return { source, records: canonicalRecords(raw, source), lines: raw.length };
+  return { source, records: canonicalRecords(raw, source), lines: raw.length, fingerprint };
 }
 
 export function canonicalRecords(records: SourceRecord[], source = detectSource(records)): SourceRecord[] {

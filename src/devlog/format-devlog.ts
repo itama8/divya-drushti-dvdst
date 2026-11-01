@@ -36,7 +36,7 @@ export function devlogFromSummary(summary: HandoffSummary, options: { date: stri
     commits: summary.commits.matched,
     commit_match_confidence: summary.commits.expected.length === 0 ? 0.5 : summary.commits.matched.length / Math.max(1, summary.commits.expected.length),
     commit_match_notes: summary.commits.matched.length > 0 ? "Auto-derived from Pi session evidence." : "No matching commit found in transcript; verify manually.",
-    session_outcome: summary.outcome === "stable" ? "accepted" : summary.outcome,
+    session_outcome: summary.outcome,
     next_files: summary.nextFiles.expected.length > 0 ? summary.nextFiles.expected : summary.files.read.slice(0, 3),
     handoff_ready: true,
   };

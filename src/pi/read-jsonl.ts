@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 
 export interface SourceReference {
   entryId?: string;
@@ -40,13 +41,20 @@ function parseLine(buffer: Buffer, source: SourceReference): SourceRecord | unde
 }
 
 export async function readJsonl(path: string): Promise<SourceRecord[]> {
+  return (await readJsonlSnapshot(path)).records;
+}
+
+/** Fingerprint exactly the bytes used for parsing, including whitespace. */
+export async function readJsonlSnapshot(path: string): Promise<{ records: SourceRecord[]; fingerprint: string }> {
   const records: SourceRecord[] = [];
+  const hash = createHash("sha256");
   let pending = Buffer.alloc(0);
   let pendingStart = 0;
   let line = 1;
 
   for await (const rawChunk of createReadStream(path)) {
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
+    hash.update(chunk);
     const combined = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
     let lineStart = 0;
 
@@ -77,7 +85,7 @@ export async function readJsonl(path: string): Promise<SourceRecord[]> {
     if (record) records.push(record);
   }
 
-  return records;
+  return { records, fingerprint: hash.digest("hex") };
 }
 
 export function isObject(value: unknown): value is Record<string, unknown> {

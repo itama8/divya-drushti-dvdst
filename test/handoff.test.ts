@@ -12,7 +12,9 @@ describe("handoff summary", () => {
     const summary = buildHandoffSummary(bundle);
 
     assert.equal(summary.status, "accepted");
-    assert.equal(summary.outcome, "stable");
+    // Edit and test were dispatched in the same assistant message: the test
+    // result does not establish that it started after the edit settled.
+    assert.equal(summary.outcome, "validation-stale");
     assert.equal(summary.tests.ran, true);
     assert.equal(summary.commands.tests, 1);
     assert.deepEqual(summary.files.modified, ["src/a.ts"]);

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { guardStdout } from "./stdout.js";
@@ -47,12 +48,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "review" ? process.argv.slice(3) : process.argv.slice(2);
   const { values } = parseArgs({
     args,
-    options: {
-      input: { type: "string", short: "i" },
-      watch: { type: "boolean", short: "w" },
-      "interval-ms": { type: "string", default: "1000" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.review),
     strict: true,
   });
   if (values.help) usage(0);

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
@@ -16,13 +17,7 @@ function usage(): never {
 const stripped = process.argv[2] === "probe" ? process.argv.slice(3) : process.argv.slice(2);
 const { values, positionals } = parseArgs({
   args: stripped,
-  options: {
-    session: { type: "string", short: "s" },
-    devlog: { type: "string", short: "d" },
-    out: { type: "string", short: "o" },
-    pretty: { type: "boolean", default: false },
-    help: { type: "boolean", short: "h" },
-  },
+  options: parserOptions(CLI_OPTIONS.probe),
   strict: true,
   allowPositionals: true,
 });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_OPTIONS, parserOptions } from "./command-options.js";
 import { guardStdout } from "./stdout.js";
 import { parseArgs } from "node:util";
 import { normalizeSnapshot } from "../normalize/normalize.js";
@@ -20,12 +21,7 @@ async function main(): Promise<void> {
   const args = process.argv[2] === "normalize" ? process.argv.slice(3) : process.argv.slice(2);
   const { values, positionals } = parseArgs({
     args,
-    options: {
-      store: { type: "string", short: "s" },
-      session: { type: "string" },
-      snapshot: { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
+    options: parserOptions(CLI_OPTIONS.normalize),
     strict: true,
     allowPositionals: true,
   });

@@ -6,12 +6,13 @@ export interface HandoffSummary {
   schemaVersion: string;
   session: JsonObject;
   status: "accepted" | "user-testing" | "blocked" | "regressed" | "planned" | "closed" | "unknown";
-  outcome: "stable" | "no-test-evidence" | "no-validation" | "test-failed" | "unresolved-failure" | "unknown";
+  outcome: "stable" | "no-test-evidence" | "no-validation" | "test-failed" | "unresolved-failure" | "unknown" | "unfinished" | "validation-stale";
   source: JsonObject;
   goals: JsonObject[];
   files: { modified: string[]; read: string[] };
   commands: { total: number; byClass: Record<string, number>; failed: number; tests: number };
   tests: { ran: boolean; failures: number; commands: number };
+  validation: ProbeBundle["validation"];
   commits: { created: string[]; expected: string[]; matched: string[]; missing: string[]; observed: string[]; additional: string[] };
   skills: { names: string[]; explicitCommands: number; loadCandidates: number; attributedRecords: number };
   devlog?: { status: string | null; path: string; expected: string[]; matched: string[]; missing: string[] };
@@ -26,11 +27,14 @@ interface DevlogComparison {
   commits: { matched: string[]; missingFromCandidates: string[]; additionalCandidates: string[] };
 }
 
-function classifyOutcome(failedCommands: number, testCommands: number, matchedCommits: number, expectedCommits: number): HandoffSummary["outcome"] {
-  if (failedCommands > 0) return "unresolved-failure";
-  if (testCommands === 0 && expectedCommits === 0) return "no-validation";
-  if (testCommands === 0) return "no-test-evidence";
+function classifyOutcome(validation: ProbeBundle["validation"], matchedCommits: number, expectedCommits: number): HandoffSummary["outcome"] {
+  if (validation.unfinishedCalls > 0) return "unfinished";
+  if (validation.unresolvedFailures.length > 0) return "unresolved-failure";
+  if (validation.attempted === 0 && expectedCommits === 0) return "no-validation";
+  if (validation.passed === 0) return "no-test-evidence";
   if (expectedCommits > 0 && matchedCommits === 0) return "no-test-evidence";
+  if (validation.opaqueEffects.length > 0) return "unknown";
+  if (validation.passedAfterLastMutation.length === 0) return "validation-stale";
   return "stable";
 }
 
@@ -84,10 +88,10 @@ export function buildHandoffSummary(bundle: ProbeBundle): HandoffSummary {
   const expectedCommits = devlogComparison?.expected.commits ?? [];
 
   return {
-    schemaVersion: "0.1.0-handoff",
+    schemaVersion: "0.2.0-handoff",
     session: bundle.session as JsonObject,
     status: classifyStatus(devlogSummary),
-    outcome: classifyOutcome(failedCommands, testCommands, matchedCommits.length, expectedCommits.length),
+    outcome: classifyOutcome(bundle.validation, matchedCommits.length, expectedCommits.length),
     source: {
       path: (bundle.session as { sourcePath: string }).sourcePath,
       bytes: (bundle.session as { sourceBytes: number }).sourceBytes,
@@ -102,10 +106,11 @@ export function buildHandoffSummary(bundle: ProbeBundle): HandoffSummary {
       tests: testCommands,
     },
     tests: {
-      ran: testCommands > 0,
+      ran: bundle.validation.completed > 0,
       failures: commands.filter((command) => command.classes.includes("test") && command.result?.isError === true).length,
       commands: testCommands,
     },
+    validation: bundle.validation,
     commits: {
       created: bundle.commitsCreated,
       expected: expectedCommits,
@@ -156,6 +161,7 @@ export function handoffToText(summary: HandoffSummary): string {
 
   lines.push("");
   lines.push(`Tests: ran=${summary.tests.ran} failures=${summary.tests.failures}`);
+  lines.push(`Validation: completed=${summary.validation.completed} passed=${summary.validation.passed} unfinished=${summary.validation.unfinished} passedAfterLastMutation=${summary.validation.passedAfterLastMutation.length}`);
 
   if (summary.skills.names.length > 0) {
     lines.push("");

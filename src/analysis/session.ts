@@ -9,6 +9,7 @@ import { deriveRows, type Row, type SessionRows } from "./rows.js";
 export interface SessionData {
   /** Agent that wrote the session. */
   source: SessionSource;
+  fingerprint: string;
   /** Session file the data was read from. */
   path: string;
   /** Session id from the header. */
@@ -47,13 +48,13 @@ function configFor(cwd: string | null, configPath: string | undefined): Promise<
 
 /** Reads one session file and derives its rows. */
 export async function loadSessionFile(path: string, options: LoadSessionOptions = {}): Promise<SessionData> {
-  const { source, records, lines } = await readSessionRecords(path);
+  const { source, records, lines, fingerprint } = await readSessionRecords(path);
   const header = records.map((record) => record.value).find((value) => isObject(value) && value.type === "session");
   const cwd = isObject(header) && typeof header.cwd === "string" ? header.cwd : null;
   const config = await configFor(cwd, options.configPath);
-  const rows = deriveRows(records, path, { full: options.full ?? true, commandClasses: config.commandClasses });
+  const rows = deriveRows(records, path, { full: options.full ?? true, commandClasses: config.commandClasses, fingerprint });
   rows.overview.lines = lines;
-  return { source, path, session: rows.overview.session as string, cwd, records, ...rows, config };
+  return { source, fingerprint, path, session: rows.overview.session as string, cwd, records, ...rows, config };
 }
 
 /**
