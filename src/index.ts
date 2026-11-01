@@ -19,3 +19,6 @@ export { parseBashEffects, type BashEffect, type BashEffects } from "./pi/bash-e
 export { classifyCommand, classifyCommandWithReasons, type CommandClass, type CommandClassRule } from "./pi/classify-commands.js";
 export { loadProjectConfig, parseConfig, type ProjectConfig } from "./config/config.js";
 export { readJsonl, type SourceRecord, type SourceReference } from "./pi/read-jsonl.js";
+
+export { queryInspection, type InspectionKind, type InspectionQueryOptions } from "./analysis/inspection.js";
+export { FILES_SCHEMA, COMMANDS_SCHEMA, SKILLS_SCHEMA } from "./analysis/inspection-schema.js";

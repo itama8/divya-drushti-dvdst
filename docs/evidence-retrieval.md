@@ -90,6 +90,15 @@ dvdst call --ref '<same ref>' --limit 2000 --result-offset 2000
 Programmatic callers can import `readCall`, `ReadCallOptions`, `TextSlice`,
 and `CALL_SCHEMA` from `dvdst`. CLI and library share validation and retrieval.
 
+## File, command, and skill references
+
+`files`, `commands`, and `skills --contract exploration` expose the same call
+and message references; pass the contract flag to each command. These queries
+add bounded rows, filters/projection, and source completeness to inspection.
+Stored mode reads a pinned raw snapshot, so its refs lead to the store file.
+See [inspection queries](inspection-queries.md) for schemas, compatibility,
+explicit/inferred targets, completion states, and attribution boundaries.
+
 ## Trace and summary evidence
 
 `trace` continues to return provenance and skill/file/command associations.

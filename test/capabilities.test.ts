@@ -49,7 +49,7 @@ describe("capability catalog", () => {
     assert.deepEqual(detail("session-stage").sessionSources, ["claude", "codex"]);
     assert.deepEqual(detail("review").sessionSources, []);
     assert.ok(detail("review").limitations.some(limit => limit.includes("Pi")));
-    assert.equal(detail("files").output.schema, null, "undeclared legacy schemas stay explicitly unknown");
+    assert.match(detail("files").output.schema!.description, /Exploration contract only/);
     assert.equal(detail("schema").options.format!.effectiveDefault, "text");
   });
 
@@ -91,7 +91,7 @@ describe("capability catalog", () => {
   });
 
   it("shares field schemas with schema and does not expose mutable parser references", () => {
-    for (const name of ["calls", "call", "messages", "message", "search", "capabilities"]) {
+    for (const name of ["calls", "call", "messages", "message", "search", "capabilities", "files", "commands", "skills"]) {
       const command = detail(name);
       const result = cli("schema", name, "--format", "json");
       assert.equal(result.status, 0, result.stderr);

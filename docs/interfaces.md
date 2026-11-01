@@ -18,6 +18,7 @@ Pi, Claude Code, and Codex transcripts feed a common row interface:
 - `search`: literal search over message text, shell commands, and tool results
 - `message`: exact message and surrounding conversation, by sequence or snapshot reference
 - `context`: recorded system prompt sections and sizes
+- `files`, `commands`, `skills --contract exploration`: bounded target/attempt/skill queries (pass the flag to each command)
 - `schema`: field descriptions for built-in streams and project extractors
 - `capabilities`: built-in command catalog; targeted descriptors include typed
   inputs, shared options/output schemas, source coverage, effects, and constraints
@@ -81,8 +82,21 @@ dvdst files /path/to/claude-transcript.jsonl --format json
 dvdst handoff /path/to/claude-transcript.jsonl
 ```
 
-These commands use a direct bundle path. Their file summaries do not include
-all inferred bash reads available in call rows and stored artifacts. Codex patch paths are included in direct file summaries.
+Legacy direct inspection/closeout uses a bundle path. Its file summaries cover
+explicit file tools and Codex patch paths; shell effects live in call rows and
+the separate stored bash-effect artifact.
+
+`files`, `commands`, and `skills --contract exploration` share declared schemas
+with `schema` and `capabilities`, analysis transcript selection, projection,
+limits, and JSONL/JSON/TSV output. Pass the contract flag to each command. They
+default to 20 rows and bounded command text, expose source/segment/fingerprint
+and raw line/byte provenance, and link to `call`/`message`. `--page` reports counts,
+continuation, and source failures, with nonzero exit for partial reads. File rows
+separate explicit targets from inferred shell effects and recorded completion;
+skills preserve failed/unconfirmed loads and attribution basis. Stored selection
+requires `--store`/`--session`, rejects transcript discovery flags, and reads the
+raw snapshot without derived writes. Legacy output remains the default. See
+[inspection contracts](inspection-queries.md) for filters and migration.
 
 `trace` recognizes arbitrary tool calls and canonical record IDs in addition
 to its existing associations. JSON reports `found`, source locations, and
@@ -155,8 +169,8 @@ changes. See [live streams](live-streams.md).
 
 `capabilities [command] [--group ...]` defaults to machine-readable JSON.
 It uses the dispatcher's command registry and the option definitions consumed
-by each CLI parser. Shared field schemas match `schema`; undeclared legacy
-output schemas remain null. Catalog lookup does not discover/import project
+by each CLI parser. Shared field schemas match `schema`; inspection schemas explicitly apply to
+`--contract exploration`. Other undeclared output schemas remain null. Catalog lookup does not discover/import project
 extractors. See [command discovery](command-discovery.md).
 
 - CLI: the `dvdst` binary, or `npm run --silent dvdst -- <command>` in this checkout

@@ -11,12 +11,26 @@ influenced.
 npm run --silent dvdst -- skills --store .dvdst/store --session <id>
 ```
 
-The command normalizes the snapshot when needed, then extracts skill streams
+The legacy command normalizes the snapshot when needed, then extracts skill streams
 and prints the invocation list. Two derived files live in the snapshot under
 `records/`:
 
 - `skill-invocations.jsonl` - every detected invocation and load candidate
 - `skill-attributions.jsonl` - every attributed record with its labels
+
+For bounded, read-only queries directly from transcripts or stored raw
+snapshots, pass `--contract exploration`:
+
+```bash
+dvdst skills /path/to/session.jsonl --contract exploration --load-status unconfirmed --page
+dvdst skills --contract exploration --store .dvdst/store --session <id> --view attributions --limit 10 --page
+```
+
+All three views support both modes, shared transcript selection, field projection,
+pagination/completeness, and call/message references. Attribution output has one
+membership per row. Failed/unconfirmed loads have no active span. The field
+schema applies to this contract; older invocations preserve their legacy shapes
+and store-write behavior. See [inspection queries](inspection-queries.md).
 
 ## Detection
 

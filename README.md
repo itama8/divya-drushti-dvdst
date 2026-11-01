@@ -182,6 +182,25 @@ dvdst messages /path/to/session.jsonl --role user,assistant --limit 10
 [conversation exploration](docs/conversation-exploration.md) for neighborhoods,
 source locations, and pagination/completeness metadata.
 
+Query file targets, command attempts, and skill evidence through the same
+bounded exploration workflow:
+
+```bash
+dvdst capabilities files
+dvdst schema commands
+dvdst files /path/to/session.jsonl --contract exploration --path src/ --page
+dvdst commands /path/to/session.jsonl --contract exploration --class test --limit 5 --page
+dvdst skills /path/to/session.jsonl --contract exploration --view attributions --page
+```
+
+The exploration contract supplies source/segment identity, raw line/byte ranges,
+call/message references, field projection, and completeness/continuation metadata.
+File targets distinguish explicit arguments from inferred shell effects, alongside
+recorded outcomes. Skill associations do not prove adherence. Existing inspection
+invocations keep their legacy shapes and TSV defaults; opt into the shared schema
+with `--contract exploration`. See [inspection queries](docs/inspection-queries.md)
+for direct/stored selection, filters, bounds, and compatibility.
+
 These commands read Pi, Claude Code, and Codex sessions. Select with
 `--source pi|claude|codex|all`; the default remains Pi. For example:
 

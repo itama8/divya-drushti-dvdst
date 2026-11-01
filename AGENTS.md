@@ -28,6 +28,11 @@ while retaining the caller's working directory for project selection.
 - Use `capabilities <command>` to discover typed arguments, output fields where
   declared, source support, and conditional side effects without loading project
   extractors. For conversation lookup, use `search`, then `message`, then `call`.
+- For file targets, command attempts, or skill evidence, use `files`, `commands`,
+  or `skills` with `--contract exploration`. Consult their capabilities/schema;
+  `--page` reports counts and source completeness. Existing no-contract output
+  remains legacy. Stored selection requires `--store`/`--session`, rejects
+  discovery flags, and exploration reads raw snapshots without derived writes.
 - Analysis reads transcripts directly. `events <file> --store <directory>`
   creates stored evidence and findings when that workflow is needed.
 - Cite `session` and source `line`. Null outcome or cost means unknown; inferred

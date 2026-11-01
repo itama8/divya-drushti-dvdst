@@ -34,6 +34,9 @@ fields are not declared; consult that command's docs instead of guessing.
 | `dvdst calls` | tool call with its result | what ran, duration, exit code, result size, truncation, files read and changed, repeats |
 | `dvdst context` | system prompt section | what the session started with, and its size |
 | `dvdst messages` | canonical message | browse prompts/replies with bounded text and tool links |
+| `dvdst files --contract exploration` | explicit file target or inferred shell effect | attempted paths with evidence basis/outcome |
+| `dvdst commands --contract exploration` | normalized shell attempt | bounded command prefix, classification and recorded outcome |
+| `dvdst skills --contract exploration` | invocation or attribution membership | expanded/loaded/failed/unconfirmed skills; associations, not adherence |
 | `dvdst search` | matching message/command/result | find earlier requests, corrections, decisions, or failures |
 
 Inspect `dvdst schema calls` or its capability descriptor before composing a
@@ -61,8 +64,10 @@ and discovery can fall back to other projects when the current cwd has none.
 Prefer an exact path for a particular session. `--project <name>` constrains
 project discovery; `--root <dir>` selects a flat transcript directory.
 
-`--source` belongs to the analysis commands, not `handoff`, `files`, or store
-commands. Pass those the exact transcript path returned by `overview`. The
+`--source` also works for `files`, `commands`, and `skills` with
+`--contract exploration`. Legacy inspection and `handoff` take the exact path
+returned by `overview`. Stored inspection requires `--store`/`--session` (optional
+`--snapshot`) and rejects transcript selectors/discovery flags. The
 standalone `sessions` filename discovery command remains Pi-only.
 
 ## 3. Ask the question
@@ -150,6 +155,35 @@ maximum 65536. Missing results are null. References pin an exact file and raw
 snapshot; any append/change requires refreshing `calls`. Row offsets are not
 snapshot cursors. `--full` remains available for bulk payload analysis, and
 payload field projection requires it. See `docs/evidence-retrieval.md`.
+
+For file, command, or skill questions, use the shared inspection contract:
+
+```bash
+dvdst files /path/to/session.jsonl --contract exploration --path src/ --basis explicit-file-tool --page
+dvdst commands /path/to/session.jsonl --contract exploration --class test --outcome unfinished --page
+dvdst skills /path/to/session.jsonl --contract exploration --load-status unconfirmed --page
+dvdst skills /path/to/session.jsonl --contract exploration --view attributions --limit 10 --page
+```
+
+Read `capabilities files|commands|skills` and their matching schemas. These
+queries share transcript selection, `--fields`, `--limit`, `--offset`, and
+JSONL/JSON/TSV with conversation queries. They default to 20 rows; commands
+return 240-character prefixes (`--text-limit` 1–4096), expanded with `call --ref`.
+Every row preserves segment/fingerprint, raw source line/byte provenance, and
+call/message references. Use `refKind` for the reader; `messageRef` shows context.
+`--page` reports continuation and failed sources; partial results exit nonzero.
+
+File rows are attempted targets, with `basis: explicit-file-tool|inferred-shell`
+and `outcome: succeeded|failed|unfinished`. A successful enclosing shell call
+does not prove each inferred effect occurred. Skill candidates retain failed
+and unconfirmed loads with no active span; same-turn attribution does not prove
+adherence. Unknown tools acquire no invented targets. Bounds apply to returned
+rows/text, not parser memory, total JSON bytes, or metadata sizes.
+
+Without the contract flag, existing legacy inspection retains its differing
+direct/store shapes and TSV defaults. New controls require exploration mode.
+Exploration store mode reads raw snapshots without deriving files; legacy store
+skills may write missing records. See `docs/inspection-queries.md`.
 
 For a machine-readable closeout, run `dvdst handoff <session> --format json`.
 For stored findings, `dvdst events <session> --store <directory>` prints a

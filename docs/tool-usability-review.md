@@ -10,8 +10,11 @@ The second follow-up adds message listing, literal message/command/result
 search, bounded neighborhoods, and conversation-query page/completeness
 metadata. See [conversation contracts](conversation-exploration.md). The third
 follow-up adds a shared built-in command catalog and executable option contracts;
-see [command discovery](command-discovery.md). Legacy output field schemas and
-completeness metadata for older analysis commands remain further work below.
+see [command discovery](command-discovery.md). The next slice adds opt-in shared inspection query contracts for files,
+commands, and skills, preserving legacy defaults; see
+[inspection queries](inspection-queries.md). Completeness metadata for older
+analysis streams, queryable findings, and independent model evaluations remain
+further work below. Historical findings below describe the reviewed checkpoint.
 
 ## Product boundary
 

@@ -77,9 +77,10 @@ arbitrary archive. `DVDST_SESSION_ROOT` also overrides the default root.
 The separate `sessions <directory>` command recognizes Pi filenames only.
 
 Source selection flags belong to analysis commands (`overview`, `turns`,
-`calls`, `context`, and project extractors). For `handoff`, `files`, or stored
-commands, pass the exact path returned by `overview`; those commands do not
-accept `--source`. For example, after verifying the overview:
+`calls`, `context`, conversation queries, inspection with `--contract exploration`,
+and project extractors). For `handoff` and legacy inspection, pass the exact
+path returned by `overview`. Stored inspection instead requires
+`--store`/`--session`; it does not accept `--source`. For example, after verifying the overview:
 
 ```bash
 SESSION=$(dvdst overview latest --source codex | jq -r .path)
@@ -123,7 +124,7 @@ dvdst calls "$SESSION" \
   | jq -c 'select((.mutates | length) > 0) | {session, line, mutates, isError}'
 ```
 
-`calls` file effects include inferred shell reads/writes. Direct `files` and
+`calls` file effects include inferred shell reads/writes. Legacy direct `files` and
 handoff summaries include explicit file tools and Codex patch paths; they do
 not enumerate every shell file effect. Skill attribution describes evidence
 associations, not proof that the agent followed a skill.
@@ -167,6 +168,29 @@ Failed sources still cause nonzero exit. A hit on merged Claude text cites the
 matching source block; the message may begin earlier. Codex `channel` identifies
 analysis versus final/commentary text. See [conversation contracts](conversation-exploration.md)
 and `schema messages`, `schema search`, `schema message`.
+
+## File, command, and skill queries
+
+Use `capabilities files|commands|skills` and the matching `schema` target.
+Pass `--contract exploration` for shared selection, output, and evidence fields:
+
+```bash
+dvdst files "$SESSION" --contract exploration --basis explicit-file-tool --page
+dvdst commands "$SESSION" --contract exploration --outcome unfinished --page
+dvdst skills "$SESSION" --contract exploration --load-status unconfirmed --page
+```
+
+These queries accept source/project/root/time/session-count selection, `--fields`,
+`--limit`, `--offset`, and JSONL/JSON/TSV. Defaults are 20 rows and 240-character
+command prefixes. `--page` reports counts, continuation, and source failures;
+partial reads exit nonzero. Keep session/segment, source line, and references.
+Expand `ref` with its `refKind` reader or `messageRef` with `message`.
+
+Stored selection instead requires `--store`/`--session` and optional `--snapshot`;
+it rejects discovery flags and positionals. Exploration reads raw snapshots
+without store writes. Legacy inspection remains the default with older shapes
+and TSV output. See [inspection queries](inspection-queries.md) for compatibility,
+filters, observed/inferred targets, unfinished outcomes, and skill associations.
 
 ## Stored findings and optional staging
 

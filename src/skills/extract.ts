@@ -137,11 +137,45 @@ export async function extractSkills(options: {
     return new JsonlRows(text, filename).parse<T>();
   };
 
-  const rawMessages = await parse<Omit<MessageRecord, "turn">>("messages.jsonl");
-  const invocations = await parse<ToolInvocationRecord>("tool-invocations.jsonl");
-  const results = await parse<ToolResultRecord>("tool-results.jsonl");
-  const resultByCallId = new Map(results.map((result) => [result.toolCallId, result]));
+  const { invocationLines, attributedRecords, summary, diagnostics } = deriveSkillEvidence(
+    await parse<Omit<MessageRecord, "turn">>("messages.jsonl"),
+    await parse<ToolInvocationRecord>("tool-invocations.jsonl"),
+    await parse<ToolResultRecord>("tool-results.jsonl"), snapshotInfo.sessionId,
+  );
 
+  await mkdir(recordsDirectory, { recursive: true, mode: 0o700 });
+  await writeAtomic(join(recordsDirectory, "skill-invocations.jsonl"), `${invocationLines.map((row) => JSON.stringify(row)).join("\n")}\n`);
+  await writeAtomic(join(recordsDirectory, "skill-attributions.jsonl"), `${attributedRecords.map((row) => JSON.stringify({ schemaVersion: 1, kind: "skill-attribution", ...row })).join("\n")}\n`);
+
+  const derived = {
+    schemaVersion: 1,
+    extractor: { name: SKILL_EXTRACTOR, version: SKILL_EXTRACTOR_VERSION },
+    sourceHash: snapshotInfo.sourceHash,
+    status: "complete",
+    counts: summary,
+    diagnostics,
+  };
+  await writeAtomic(join(snapshotInfo.path, "derived-skills.json"), `${JSON.stringify(derived, null, 2)}\n`);
+
+  return {
+    schemaVersion: 1,
+    kind: "skills",
+    extractor: { name: SKILL_EXTRACTOR, version: SKILL_EXTRACTOR_VERSION },
+    store,
+    sessionId: snapshotInfo.sessionId,
+    sourceHash: snapshotInfo.sourceHash,
+    snapshot: snapshotInfo.path,
+    status: "complete",
+    counts: summary,
+    diagnostics,
+  };
+}
+
+/** Pure skill evidence derivation shared by stored extraction and exploration. */
+export function deriveSkillEvidence(rawMessages: Omit<MessageRecord, "turn">[], invocations: ToolInvocationRecord[], results: ToolResultRecord[], sessionId: string) {
+  const resultByCallId = new Map(results.map(result => [result.toolCallId, result]));
+  const seeds: SkillSeed[] = [];
+  const diagnostics: { line: number; message: string }[] = [];
   // Reconstruct agent turns in append order: a user message starts a new turn.
   const turnByEntry = new Map<string, number>();
   const lastLineByTurn = new Map<number, number>();
@@ -154,15 +188,12 @@ export async function extractSkills(options: {
     messages.push({ ...message, turn });
   }
 
-  const seeds: SkillSeed[] = [];
-  const diagnostics: { line: number; message: string }[] = [];
-
   // 1. Explicit expanded /skill:name messages are observed invocations.
   for (const message of messages) {
     if (message.role !== "user") continue;
     const skill = parseSkillBlock(message.text);
     if (!skill) continue;
-    const id = `skill:${snapshotInfo.sessionId}:${message.entryId}`;
+    const id = `skill:${sessionId}:${message.entryId}`;
     seeds.push({
       id,
       name: skill.name,
@@ -194,7 +225,7 @@ export async function extractSkills(options: {
     const baseLine = result === undefined ? call.source.line : result.source.line;
     const nextAssistant = messages.find((item) => item.turn === entryTurn && item.role === "assistant" && item.source.line > baseLine);
     seeds.push({
-      id: `skill:${snapshotInfo.sessionId}:${sha256(call.toolCallId).slice(0, 16)}`,
+      id: `skill:${sessionId}:${sha256(call.toolCallId).slice(0, 16)}`,
       name: loaded ? skillNameFromContent(result.text, path) : path,
       path,
       mode: "model-load-candidate",
@@ -280,30 +311,5 @@ export async function extractSkills(options: {
     attributedRecords: attributedRecords.length,
   };
 
-  await mkdir(recordsDirectory, { recursive: true, mode: 0o700 });
-  await writeAtomic(join(recordsDirectory, "skill-invocations.jsonl"), `${invocationLines.map((row) => JSON.stringify(row)).join("\n")}\n`);
-  await writeAtomic(join(recordsDirectory, "skill-attributions.jsonl"), `${attributedRecords.map((row) => JSON.stringify({ schemaVersion: 1, kind: "skill-attribution", ...row })).join("\n")}\n`);
-
-  const derived = {
-    schemaVersion: 1,
-    extractor: { name: SKILL_EXTRACTOR, version: SKILL_EXTRACTOR_VERSION },
-    sourceHash: snapshotInfo.sourceHash,
-    status: "complete",
-    counts: summary,
-    diagnostics,
-  };
-  await writeAtomic(join(snapshotInfo.path, "derived-skills.json"), `${JSON.stringify(derived, null, 2)}\n`);
-
-  return {
-    schemaVersion: 1,
-    kind: "skills",
-    extractor: { name: SKILL_EXTRACTOR, version: SKILL_EXTRACTOR_VERSION },
-    store,
-    sessionId: snapshotInfo.sessionId,
-    sourceHash: snapshotInfo.sourceHash,
-    snapshot: snapshotInfo.path,
-    status: "complete",
-    counts: summary,
-    diagnostics,
-  };
+  return { invocationLines, attributedRecords, summary, diagnostics };
 }

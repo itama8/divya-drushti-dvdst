@@ -1,3 +1,4 @@
+import { INSPECTION_SCHEMAS } from "./inspection-schema.js";
 import { STREAMS, type StreamSpec } from "./rows.js";
 import { CALL_SCHEMA } from "./read-call.js";
 import { MESSAGE_SCHEMA, MESSAGES_SCHEMA, SEARCH_SCHEMA } from "./conversation-schema.js";
@@ -11,5 +12,5 @@ export const CAPABILITIES_SCHEMA: StreamSpec = {
   ],
 };
 
-export const EXPLORATION_SCHEMAS = { call: CALL_SCHEMA, messages: MESSAGES_SCHEMA, message: MESSAGE_SCHEMA, search: SEARCH_SCHEMA, capabilities: CAPABILITIES_SCHEMA };
+export const EXPLORATION_SCHEMAS = { call: CALL_SCHEMA, messages: MESSAGES_SCHEMA, message: MESSAGE_SCHEMA, search: SEARCH_SCHEMA, capabilities: CAPABILITIES_SCHEMA, ...INSPECTION_SCHEMAS };
 export const BUILTIN_SCHEMAS: Record<string, StreamSpec> = { ...STREAMS, ...EXPLORATION_SCHEMAS };

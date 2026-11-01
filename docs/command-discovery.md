@@ -77,7 +77,10 @@ execution endpoint or a replacement for validation.
 
 `output` gives supported formats, default format, shape description, and shared
 field `schema`. For built-in exploration outputs, that schema is the same
-object returned by `schema <name>`. Legacy outputs without a declared field
+object returned by `schema <name>`. For `files`, `commands`, and `skills`, the shared schema applies to the opt-in
+`--contract exploration`; existing legacy output is still the default. Their
+constraints explain the modes, conditional defaults, and stored selection. See
+[inspection queries](inspection-queries.md). Other outputs without a declared field
 contract explicitly return `schema: null`; a shape description does not define
 their JSON fields. Do not invent fields for those outputs.
 

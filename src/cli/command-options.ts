@@ -1,3 +1,4 @@
+import { INSPECTION_CHOICES } from "../analysis/inspection-schema.js";
 /** Executable parseArgs options and catalog metadata live together. */
 interface Metadata {
   description: string;
@@ -48,6 +49,7 @@ const role = s("Comma-separated user,assistant,toolResult,system,developer; or a
 const ref = s("Opaque exact-file reference; any raw file append/change makes it stale.");
 const seq = s("1-based position within the selected segment.", { valueType: "integer", minimum: 1 });
 const textLimit = s("Characters per text field (Unicode code points), not a total JSON byte budget.", { valueType: "integer", minimum: 1, maximum: 65536 });
+const CLI_TEXT_PREFIX = s("Exploration command prefix in Unicode code points; expand with call --ref.", { valueType: "integer", minimum: 1, maximum: 4096, effectiveDefault: 240 });
 const textOffset = s("Zero-based Unicode code-point offset.", { valueType: "integer", minimum: 0, effectiveDefault: 0 });
 
 export const CLI_OPTIONS = {
@@ -71,9 +73,21 @@ export const CLI_OPTIONS = {
     after: s("Canonical messages after the anchor.", { valueType: "integer", minimum: 0, maximum: 10, effectiveDefault: 2 }),
     "text-offset": textOffset, help,
   },
-  records: { path: s("File path substring; files only."), class: s("Command classification; commands only."),
-    view: s("Skill view in store mode.", { default: "invocations", choices: ["invocations", "spans", "attributions"] }),
-    store, session, snapshot, format: s("Output encoding.", { default: "tsv", choices: ["json", "tsv"] }), help },
+  records: {
+    ...selection, ...rows,
+    limit: { ...rows.limit, defaultDescription: "Exploration: 20 rows. Legacy: unsupported (existing output remains unlimited)." },
+    contract: s("Output contract. Legacy preserves existing direct/store shapes; exploration uses shared schemas and query controls.", { choices: ["legacy", "exploration"], effectiveDefault: "legacy" }),
+    path: s("File path substring; files only."), class: s("Command classification; commands only."),
+    name: s("Skill name substring; skills only."),
+    operation: s("File target operation; files only.", { choices: INSPECTION_CHOICES.operation }),
+    basis: s("File evidence basis; files only.", { choices: INSPECTION_CHOICES.basis }),
+    outcome: s("Recorded call outcome; files/commands only.", { choices: INSPECTION_CHOICES.outcome }),
+    "load-status": s("Skill load status; skills only.", { choices: INSPECTION_CHOICES.loadStatus }),
+    "text-limit": { ...CLI_TEXT_PREFIX },
+    page: b("Exploration only: JSON rows, counts, continuation and source completeness; implies JSON."),
+    view: s("Skill view; exploration supports both direct and stored raw snapshots; legacy honors it in store mode.", { default: "invocations", choices: INSPECTION_CHOICES.view }),
+    store, session, snapshot,
+    format: s("Output encoding.", { choices: ["jsonl", "json", "tsv"], defaultDescription: "Legacy: tsv. Exploration: jsonl; --page implies json." }), help },
   trace: { id: s("Call, canonical record, skill invocation ID, or file path.", { short: "i" }), format: s("Output encoding.", { default: "text", choices: ["json", "tsv", "text"] }), help },
   handoff: { session: s("Alternative to one positional session selector.", { short: "s" }), devlog: s("Optional devlog for comparison.", { short: "d" }), format: s("Output encoding.", { default: "text", choices: ["text", "json"] }), help },
   handoffDevlog: {

@@ -128,3 +128,11 @@ the same defaults. `conversationFromSession` reuses a fully loaded `SessionData`
 Loaded conversations include full text for local computation; only query/read
 results apply output limits. Schemas are exported as `MESSAGES_SCHEMA`,
 `SEARCH_SCHEMA`, and `MESSAGE_SCHEMA`.
+
+## Related evidence
+
+[`files`, `commands`, and `skills`](inspection-queries.md) with
+`--contract exploration` share query pagination/projection and return call and
+message references. Follow `messageRef` to the enclosing conversation, or use
+`message --ref` on a call ref to see its requesting assistant and neighbors.
+Stored inspection refs identify the raw snapshot, preserving segment identity.
