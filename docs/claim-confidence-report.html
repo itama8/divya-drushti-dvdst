@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dvdst · What actually edits files</title>
+<style>
+  :root {
+    --ink-2: color-mix(in oklab, var(--foreground) 66%, transparent);
+    --ink-3: color-mix(in oklab, var(--foreground) 46%, transparent);
+    --panel: color-mix(in oklab, var(--foreground) 4%, transparent);
+    --panel-2: color-mix(in oklab, var(--foreground) 7%, transparent);
+    --rule: color-mix(in oklab, var(--border) 80%, transparent);
+    --verified: var(--success);
+    --declared: var(--chart-1);
+    --inferred: var(--chart-4);
+    --partial: var(--warning);
+    --contradicted: var(--destructive);
+    --opaque: color-mix(in oklab, var(--foreground) 20%, transparent);
+    --none: color-mix(in oklab, var(--foreground) 8%, transparent);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; }
+  body {
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .report { max-width: 1080px; margin: 0 auto; }
+  section { margin-top: 12px; }
+  .hero { padding-top: 4px; }
+
+  .eyebrow {
+    margin: 0 0 8px;
+    font: 600 10.5px/1 var(--font-mono);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.05;
+    letter-spacing: -.03em;
+    font-weight: 680;
+    max-width: 760px;
+  }
+  .dek {
+    margin: 10px 0 0;
+    max-width: 720px;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    line-height: 1.25;
+    letter-spacing: -.015em;
+    font-weight: 640;
+  }
+  h2 .no {
+    font: 600 11px/1 var(--font-mono);
+    letter-spacing: .12em;
+    color: var(--ink-3);
+    margin-right: 10px;
+    vertical-align: 2px;
+  }
+  .sub {
+    margin: 0 0 8px;
+    max-width: 860px;
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+  p { margin: 0 0 12px; }
+  b, strong { font-weight: 620; }
+  code {
+    font-family: var(--font-mono);
+    font-size: .92em;
+    background: var(--code-background);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin-top: 18px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .stat { background: var(--panel); padding: 7px 14px 7px; }
+  .stat .n {
+    font-size: 22px;
+    line-height: 1.05;
+    letter-spacing: -.03em;
+    font-weight: 660;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .n small { font-size: 14px; font-weight: 560; letter-spacing: 0; color: var(--ink-2); }
+  .stat .l { margin-top: 3px; font-size: 11px; line-height: 1.3; color: var(--ink-3); }
+
+  .cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .panel h3 {
+    margin: 0 0 2px;
+    font-size: 13px;
+    font-weight: 620;
+    letter-spacing: .01em;
+  }
+  .panel .cap {
+    margin: 0 0 10px;
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+
+  /* horizontal bars */
+  .chart { display: grid; gap: 6px; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) 54px;
+    gap: 8px;
+    align-items: center;
+  }
+  .bar-row .name {
+    font-size: 12px;
+    color: var(--ink-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bar-row .name em { font-style: normal; color: var(--ink-3); }
+  .track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--none);
+    overflow: hidden;
+  }
+  .fill {
+    height: 100%;
+    width: var(--w, 0%);
+    border-radius: 999px;
+    background: var(--c, var(--chart-1));
+  }
+  .bar-row .v {
+    font: 500 11px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .group-label {
+    margin: 9px 0 3px;
+    font: 600 10px/1 var(--font-mono);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .group-label:first-child { margin-top: 0; }
+
+  /* stacked bars */
+  .stack {
+    display: flex;
+    height: 12px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--none);
+  }
+  .stack span { height: 100%; width: var(--w, 0%); background: var(--c, var(--chart-1)); }
+  .stack-row { margin-bottom: 15px; }
+  .stack-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .stack-head .num {
+    font: 500 11px/1.4 var(--font-mono);
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-top: 12px;
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--chart-1)); flex: none; }
+
+  /* insight cards */
+  .insights { display: grid; gap: 8px; }
+  .insight {
+    border-left: 3px solid var(--c, var(--chart-1));
+    background: var(--panel);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 9px 12px 9px 11px;
+  }
+  .insight .k {
+    font-size: 21px;
+    line-height: 1.05;
+    letter-spacing: -.02em;
+    font-weight: 660;
+    font-variant-numeric: tabular-nums;
+  }
+  .insight .t { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--ink-2); }
+  .insight .t b { color: var(--foreground); }
+
+  /* rules */
+  .rules { display: grid; gap: 4px; }
+  .rule {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--panel);
+    border-left: 3px solid var(--c, var(--chart-1));
+  }
+  .rule .score {
+    font: 600 12px/1 var(--font-mono);
+    color: var(--c, var(--chart-1));
+    font-variant-numeric: tabular-nums;
+  }
+  .rule .r { font-size: 11.5px; line-height: 1.3; }
+  .rule .r b { font-weight: 620; }
+  .rule .r span { color: var(--ink-3); }
+
+  .split { display: grid; gap: 8px; }
+  .case {
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--rule);
+    background: var(--panel);
+  }
+  .case .tag {
+    display: inline-block;
+    font: 600 10px/1 var(--font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--c, var(--chart-1));
+    margin-bottom: 6px;
+  }
+  .case .score-line { display: flex; align-items: baseline; gap: 8px; }
+  .case .score-line .s { font: 600 19px/1 var(--font-mono); color: var(--c); font-variant-numeric: tabular-nums; }
+  .case .score-line .w { font-size: 13px; font-weight: 600; }
+  .case p { margin: 4px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-2); }
+
+  /* code */
+  pre {
+    margin: 0;
+    background: var(--code-background);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 11px 13px;
+    overflow-x: auto;
+    font: 10.5px/1.5 var(--font-mono);
+    color: var(--foreground);
+    tab-size: 2;
+  }
+  pre .k { color: var(--chart-1); }
+  pre .s { color: var(--success); }
+  pre .m { color: var(--ink-3); }
+
+  .reasons { display: grid; gap: 6px; }
+  .reason {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 11.5px;
+  }
+  .reason code { background: none; padding: 0; font-size: 11.5px; }
+  .reason .cnt {
+    font: 500 11px/1 var(--font-mono);
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cover-row { margin-bottom: 7px; }
+  .cover-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .cover-head .nm { font-size: 12.5px; }
+  .cover-head .nm span { color: var(--ink-3); }
+  .cover-head .pct { font: 500 11px/1 var(--font-mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  .fixes { display: grid; gap: 6px; }
+  .fix {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 9px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ink-2);
+  }
+  .fix .n {
+    width: 22px; height: 22px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--panel-2);
+    font: 600 10.5px/1 var(--font-mono);
+    color: var(--ink-2);
+  }
+  .fix b { color: var(--foreground); font-weight: 620; }
+
+  footer {
+    margin-top: 12px;
+    padding: 5px 0 6px;
+    border-top: 1px solid var(--rule);
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--ink-3);
+  }
+  footer code { font-size: 11px; }
+  footer .row { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+  footer .row span { white-space: nowrap; }
+
+  @media (max-width: 820px) {
+    .cols { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bar-row { grid-template-columns: 96px minmax(0, 1fr) 50px; }
+    section { margin-top: 34px; }
+  }
+</style>
+</head>
+<body>
+<div class="report">
+
+  <header class="hero">
+    <p class="eyebrow">dvdst · claim confidence · research report</p>
+    <h1>What actually edits files</h1>
+    <p class="dek">A deterministic confidence model for dvdst's mutation claims, measured on 500 Omakase sessions across Claude Code, Codex, and Pi. No model, no network, no replay — just the call, its result, and the cwd.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">500</div><div class="l">sessions · 56 Claude, 122 Codex, 322 Pi</div></div>
+      <div class="stat"><div class="n">51,734</div><div class="l">tool calls in the corpus</div></div>
+      <div class="stat"><div class="n">4.4<small>%</small></div><div class="l">of Claude calls use a direct edit tool</div></div>
+      <div class="stat"><div class="n">2,439</div><div class="l">Codex <code>exec</code> scripts dvdst does not expand</div></div>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="no">01</span>The edit surface</h2>
+    <p class="sub">Shell is the editor. Direct file tools are a rounding error in Claude sessions, and Codex hides its edits inside one <code>exec</code> tool.</p>
+    <div class="cols">
+      <div class="panel">
+        <h3>Calls by tool</h3>
+        <p class="cap">Shared scale · 500 sessions</p>
+        <div class="chart">
+          <div class="group-label">Codex · 122 sessions</div>
+          <div class="bar-row"><div class="name"><code>exec</code></div><div class="track"><div class="fill" style="--w:100%;--c:var(--opaque)"></div></div><div class="v">8,212</div></div>
+          <div class="bar-row"><div class="name">nested shell</div><div class="track"><div class="fill" style="--w:77.6%;--c:var(--inferred)"></div></div><div class="v">6,376</div></div>
+          <div class="bar-row"><div class="name">nested <code>stdin</code></div><div class="track"><div class="fill" style="--w:26.4%;--c:var(--none)"></div></div><div class="v">2,169</div></div>
+          <div class="bar-row"><div class="name"><code>apply_patch</code></div><div class="track"><div class="fill" style="--w:11.0%;--c:var(--declared)"></div></div><div class="v">905</div></div>
+          <div class="group-label">Claude · 56 sessions</div>
+          <div class="bar-row"><div class="name"><code>Bash</code></div><div class="track"><div class="fill" style="--w:46.1%;--c:var(--inferred)"></div></div><div class="v">3,787</div></div>
+          <div class="bar-row"><div class="name"><code>Write</code></div><div class="track"><div class="fill" style="--w:1.1%;--c:var(--declared)"></div></div><div class="v">94</div></div>
+          <div class="bar-row"><div class="name"><code>Edit</code></div><div class="track"><div class="fill" style="--w:1.0%;--c:var(--declared)"></div></div><div class="v">80</div></div>
+        </div>
+        <div class="legend">
+          <span><i class="dot" style="--c:var(--declared)"></i>declared path</span>
+          <span><i class="dot" style="--c:var(--inferred)"></i>inferred from shell</span>
+          <span><i class="dot" style="--c:var(--opaque)"></i>unexpanded wrapper</span>
+          <span><i class="dot" style="--c:var(--none)"></i>stdin polling</span>
+        </div>
+      </div>
+      <div class="insights">
+        <div class="insight" style="--c:var(--declared)">
+          <div class="k">174 / 3,961</div>
+          <div class="t"><b>4.4%</b> of Claude calls use <code>Write</code> or <code>Edit</code>. The other 95.6% are shell, reads, and orchestration.</div>
+        </div>
+        <div class="insight" style="--c:var(--partial)">
+          <div class="k">852</div>
+          <div class="t">opaque inline <code>python</code>/<code>node</code> interpreters in Claude sessions. <b>668</b> name a written path inside the script; <b>623</b> point inside the repo.</div>
+        </div>
+        <div class="insight" style="--c:var(--opaque)">
+          <div class="k">30%</div>
+          <div class="t">of Codex <code>exec</code> scripts are not expanded. Their <code>calls</code> rows currently carry <b>no mutates and no opaque signal</b>.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">02</span>Where dvdst goes blind</h2>
+    <p class="sub">Half of Claude's mutation claims point outside the session cwd. A quarter of its shell calls can change files dvdst cannot name. Codex's unexpanded scripts are the largest silent gap.</p>
+    <div class="cols">
+      <div class="panel">
+        <h3>Shell calls by attribution</h3>
+        <p class="cap">Path claim · opaque · no mutation claim</p>
+
+        <div class="stack-row">
+          <div class="stack-head"><span>Claude <code>Bash</code></span><span class="num">3,787</span></div>
+          <div class="stack">
+            <span style="--w:11.6%;--c:var(--declared)"></span>
+            <span style="--w:27.6%;--c:var(--opaque)"></span>
+            <span style="--w:60.8%;--c:var(--none)"></span>
+          </div>
+        </div>
+        <div class="stack-row">
+          <div class="stack-head"><span>Codex nested shell</span><span class="num">6,376</span></div>
+          <div class="stack">
+            <span style="--w:3.4%;--c:var(--declared)"></span>
+            <span style="--w:22.4%;--c:var(--opaque)"></span>
+            <span style="--w:74.2%;--c:var(--none)"></span>
+          </div>
+        </div>
+        <div class="stack-row">
+          <div class="stack-head"><span>Pi <code>bash</code></span><span class="num">17,712</span></div>
+          <div class="stack">
+            <span style="--w:9.2%;--c:var(--declared)"></span>
+            <span style="--w:9.3%;--c:var(--opaque)"></span>
+            <span style="--w:81.5%;--c:var(--none)"></span>
+          </div>
+        </div>
+
+        <div class="group-label" style="margin-top:18px">Codex <code>exec</code> disposition</div>
+        <div class="stack" style="height:14px">
+          <span style="--w:70.3%;--c:var(--success)"></span>
+          <span style="--w:12.1%;--c:var(--partial)"></span>
+          <span style="--w:17.6%;--c:var(--none)"></span>
+        </div>
+        <div class="legend">
+          <span><i class="dot" style="--c:var(--declared)"></i>path claim</span>
+          <span><i class="dot" style="--c:var(--opaque)"></i>opaque, no path</span>
+          <span><i class="dot" style="--c:var(--none)"></i>no mutation claim</span>
+          <span><i class="dot" style="--c:var(--success)"></i>expanded</span>
+          <span><i class="dot" style="--c:var(--partial)"></i>unparsed, write signal</span>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="case" style="--c:var(--contradicted)">
+          <div class="tag">Scope</div>
+          <div class="score-line"><span class="s">320</span><span class="w">Claude claims outside the cwd</span></div>
+          <p>1,293 of Codex's claims are inside the repo; 358 are outside. The claim can be true and still not belong to this change set.</p>
+        </div>
+        <div class="case" style="--c:var(--partial)">
+          <div class="tag">Warning precision and cap</div>
+          <div class="score-line"><span class="s">48 / 57</span><span class="w">warnings changed after heredoc stripping</span></div>
+          <p>Signals are matched on the whole command, including heredoc bodies; <code>awk 'NR&gt;28'</code> registers as a redirect and 2 of 57 vanished. The report also caps at <b>20 of 133</b> in one Codex session, leaving only a count.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">03</span>The ruleset</h2>
+    <p class="sub">A band, not a probability. Each band is computed from attribution class, outcome, independent confirmation, and scope. The checks that produced it travel with the claim.</p>
+    <div class="cols">
+      <div class="panel">
+        <h3>Mutation claim ladder</h3>
+        <p class="cap">Score · condition</p>
+        <div class="rules">
+          <div class="rule" style="--c:var(--verified)"><div class="score">1.00</div><div class="r"><b>verified</b> <span>— declared, succeeded, result names the path</span></div></div>
+          <div class="rule" style="--c:var(--declared)"><div class="score">0.90</div><div class="r"><b>declared</b> <span>— declared, succeeded, no path echo</span></div></div>
+          <div class="rule" style="--c:var(--inferred)"><div class="score">0.55</div><div class="r"><b>inferred</b> <span>— shell operator names a static path, succeeded</span></div></div>
+          <div class="rule" style="--c:var(--partial)"><div class="score">0.35</div><div class="r"><b>partial</b> <span>— shell names a path, call failed without a write error on it</span></div></div>
+          <div class="rule" style="--c:var(--warning)"><div class="score">0.30</div><div class="r"><b>weak</b> <span>— no result, or the signal is data rather than shell syntax</span></div></div>
+          <div class="rule" style="--c:var(--contradicted)"><div class="score">0.10</div><div class="r"><b>contradicted</b> <span>— declared failure, other path, write error, explicit no-change</span></div></div>
+          <div class="rule" style="--c:var(--opaque)"><div class="score">null</div><div class="r"><b>unknown</b> <span>— no path claim; emit a reason, hints, and resolve steps</span></div></div>
+        </div>
+        <p class="cap" style="margin:10px 0 0">All 173 successful Claude <code>Edit</code>/<code>Write</code> results echo their path → <b>1.00</b>. Codex <code>apply_patch</code> returns <code>{}</code> → <b>0.90</b>.</p>
+      </div>
+
+      <div class="split">
+        <div class="case" style="--c:var(--contradicted)">
+          <div class="tag">Declared tool fails</div>
+          <div class="score-line"><span class="s">0.10</span><span class="w">atomic</span></div>
+          <p><code>Edit</code> replaces one anchor and <code>apply_patch</code> verifies before writing. A failed call wrote nothing. Withdraw the claim.</p>
+        </div>
+        <div class="case" style="--c:var(--partial)">
+          <div class="tag">Shell fails</div>
+          <div class="score-line"><span class="s">0.35</span><span class="w">may have written first</span></div>
+          <p><b>50 of 51</b> failed Claude/Codex shell path claims have no write error naming the path. One sampled call wrote four files, then failed an <code>rg</code> glob.</p>
+        </div>
+
+
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">04</span>What an unknown looks like</h2>
+    <p class="sub">One row per opaque reason, not per guessed path. The row carries candidate paths, the checks that fired, and the exact commands that would resolve it.</p>
+    <div class="cols">
+      <div>
+        <pre><span class="m">// one row from dvdst claim-confidence</span>
+{
+  <span class="k">"claim"</span>: <span class="s">"unknown"</span>,
+  <span class="k">"reason"</span>: <span class="s">"inline-interpreter"</span>,
+  <span class="k">"risk"</span>: <span class="s">"likely"</span>,
+  <span class="k">"tool"</span>: <span class="s">"bash"</span>, <span class="k">"seq"</span>: 90, <span class="k">"scope"</span>: <span class="s">"inside"</span>,
+  <span class="k">"hints"</span>: [<span class="s">"/repo/src/renderer.ts"</span>],
+  <span class="k">"explanations"</span>: [
+    <span class="s">"inline python3 script: the command can change files"</span>
+    <span class="s">"its text does not name, so dvdst makes no path claim."</span>,
+    <span class="s">"The script names candidate paths. They are hints."</span>
+  ],
+  <span class="k">"resolve"</span>: [<span class="s">"dvdst call --ref &lt;ref&gt; --limit 4000"</span>,
+              <span class="s">"git diff -- /repo/src/renderer.ts"</span>]
+}</pre>
+      </div>
+      <div class="panel">
+        <h3>Unknown reasons · Claude + Codex</h3>
+        <p class="cap">3,470 rows · 1,669 carry at least one hint across all sources</p>
+        <div class="reasons">
+          <div class="reason"><code>inline-interpreter</code><span class="cnt">2,253</span></div>
+          <div class="reason"><code>unparsed-exec</code><span class="cnt">994</span></div>
+          <div class="reason"><code>opaque-command</code><span class="cnt">121</span></div>
+          <div class="reason"><code>computed-path</code><span class="cnt">83</span></div>
+          <div class="reason"><code>git-apply</code><span class="cnt">18</span></div>
+          <div class="reason"><code>stdin-input</code><span class="cnt">1</span></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">05</span>Coverage is the normal case</h2>
+    <p class="sub">Per-claim accuracy does not answer “is this the whole change set?”. More than 80% of Claude and Codex sessions have a write-capable call that dvdst cannot attribute.</p>
+    <div class="cols">
+      <div class="panel">
+        <h3>Session coverage</h3>
+        <p class="cap">Complete · near-complete · partial · unknown. Complete means against recorded calls, not filesystem proof.</p>
+
+        <div class="cover-row">
+          <div class="cover-head"><span class="nm">Claude <span>· 56 sessions</span></span><span class="pct">11% complete</span></div>
+          <div class="stack" style="height:14px">
+            <span style="--w:10.7%;--c:var(--success)"></span>
+            <span style="--w:5.4%;--c:var(--chart-2)"></span>
+            <span style="--w:78.6%;--c:var(--partial)"></span>
+            <span style="--w:5.4%;--c:var(--contradicted)"></span>
+          </div>
+        </div>
+        <div class="cover-row">
+          <div class="cover-head"><span class="nm">Codex <span>· 122 sessions</span></span><span class="pct">11% complete</span></div>
+          <div class="stack" style="height:14px">
+            <span style="--w:11.5%;--c:var(--success)"></span>
+            <span style="--w:9.8%;--c:var(--chart-2)"></span>
+            <span style="--w:64.8%;--c:var(--partial)"></span>
+            <span style="--w:13.9%;--c:var(--contradicted)"></span>
+          </div>
+        </div>
+        <div class="cover-row">
+          <div class="cover-head"><span class="nm">Pi <span>· 322 sessions</span></span><span class="pct">29% complete</span></div>
+          <div class="stack" style="height:14px">
+            <span style="--w:28.6%;--c:var(--success)"></span>
+            <span style="--w:11.2%;--c:var(--chart-2)"></span>
+            <span style="--w:14.6%;--c:var(--partial)"></span>
+            <span style="--w:45.7%;--c:var(--contradicted)"></span>
+          </div>
+        </div>
+
+        <div class="legend">
+          <span><i class="dot" style="--c:var(--success)"></i>complete</span>
+          <span><i class="dot" style="--c:var(--chart-2)"></i>near-complete</span>
+          <span><i class="dot" style="--c:var(--partial)"></i>partial</span>
+          <span><i class="dot" style="--c:var(--contradicted)"></i>unknown</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Minimum core changes</h3>
+        <p class="cap">Small, testable, contract-preserving</p>
+        <div class="fixes">
+          <div class="fix"><span class="n">1</span><div><b>Outcome on <code>calls.mutates</code>.</b> Withdraw failed declared tools; keep failed shell claims at <code>partial</code>.</div></div>
+          <div class="fix"><span class="n">2</span><div><b>Signal on unparsed <code>exec</code>.</b> Add an opaque reason and hints to 2,439 rows that currently say nothing.</div></div>
+          <div class="fix"><span class="n">3</span><div><b>Warnings on shell syntax.</b> Strip heredocs and quoted programs before matching; return all rows or a cursor.</div></div>
+          <div class="fix"><span class="n">4</span><div><b>Explain stage conflicts.</b> Name the missing pre-image for delete, move, and whole-file writes, plus the path-scoped check.</div></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="row">
+      <span><b>Extractor</b> examples/extractors/claim-confidence.mjs</span>
+      <span><b>Ruleset</b> docs/claim-confidence.md</span>
+      <span><b>Corpus</b> 500 omakase-v2 sessions · 51,734 calls</span>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <span>Bands are transcript evidence, not filesystem proof. A successful tool result is the agent's own report; <code>verified</code> does not prove content correctness or absence of other writes.</span>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

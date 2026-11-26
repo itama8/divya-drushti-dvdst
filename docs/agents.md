@@ -229,6 +229,9 @@ Claude/Codex live adapter or model reviewer is installed by DVDST.
   preserve byte ranges into their verbatim source snapshot.
 - Null cost, time, or outcome is unknown, not zero or successful. Findings are
   derived evidence; they do not establish correctness or product acceptance.
+- `calls.mutates` and `unattributedBash` are inference, not proof. See
+  [claim confidence](claim-confidence.md) for deterministic bands, unknown
+  rows with path hints, and per-session coverage.
 - Handoff `validation` distinguishes attempted/completed/passed/failed/unfinished
   tests and validation after the last potential mutation. Historical failures
   remain counted after successful retries; inspect latest attempts. `stable`
