@@ -118,7 +118,7 @@ come from the Pi extension:
 | Session analysis: `overview`, `turns`, `calls`, `context` | Supported | Supported, with missing source fields | Supported, with source limits |
 | Conversation exploration: `messages`, `search`, `message` | Supported | Supported, with source-block provenance | Supported, with channels and segment limits |
 | Direct inspection and closeout: `files`, `commands`, `skills`, `trace`, `probe`, `handoff`, `handoff-devlog` | Supported | Supported through transcript conversion | Supported through rollout conversion |
-| Session-based Git staging | Supported | Supported | Supported for recorded patch formats |
+| Session-based Git staging: `stage`, `session-stage --agent` | Supported from transcripts or the live stream | Supported | Supported for recorded patch formats |
 | Stored session pipeline: `ingest`, `normalize`, `artifacts`, `events` | Supported | Supported | Supported |
 | Bundled live recorder and settled review frames | Pi extension | No bundled adapter | No bundled adapter |
 
@@ -308,7 +308,7 @@ evidence limits and watcher behavior.
 - `docs/session-ingestion.md` - the store, change detection, and failure safety.
 - `docs/evidence-model.md` - the storage and provenance model.
 - `docs/live-streams.md` - the live event contract and Pi extension adapter.
-- `docs/session-staging.md` - Claude Code and Codex staging, pagination, and post-commit cursors.
+- `docs/session-staging.md` - Pi, Claude Code, and Codex transcript staging, discovery, pagination, and post-commit cursors.
 - `docs/stage-manifests.md` - HEAD-pinned selection across sessions.
 - `docs/cp0-benchmark.md` and `docs/benchmark-report.md` - historical Pi benchmark results.
 - `docs/project-plan.md` - scope, checkpoints, and completion criteria.

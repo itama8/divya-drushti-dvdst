@@ -182,8 +182,35 @@ export function inspectBash(candidates: BashCandidate[]): BashWarning[] {
   return matched.sort((left, right) => signalWeight(right.signals) - signalWeight(left.signals));
 }
 
-function editPatch(toolName: string, args: Record<string, unknown>, sourceEventId: string, resultEventId: string): StagePatch | undefined {
+function singleEdit(value: unknown): value is { oldText: string; newText: string } {
+  return isObject(value) && typeof value.oldText === "string" && typeof value.newText === "string";
+}
+
+/**
+ * Pi records the model's raw edit arguments and normalizes them only when the
+ * tool runs. This mirrors that deterministic normalization (Pi's
+ * prepareEditArguments) so a successful call is replayed with the
+ * replacements Pi actually applied: `edits` sent as a JSON string, a single
+ * edit object instead of an array, and the legacy top-level oldText/newText
+ * pair appended after any `edits`. Nothing is inferred beyond those forms.
+ */
+export function normalizeEditArguments(args: Record<string, unknown>): Record<string, unknown> {
+  let edits = args.edits;
+  if (typeof edits === "string") {
+    try {
+      const parsed: unknown = JSON.parse(edits);
+      if (Array.isArray(parsed)) edits = parsed;
+      else if (singleEdit(parsed)) edits = [parsed];
+    } catch { /* left as recorded; validation below refuses it */ }
+  } else if (singleEdit(edits)) edits = [edits];
+  if (typeof args.oldText !== "string" || typeof args.newText !== "string") return edits === args.edits ? args : { ...args, edits };
+  const { oldText, newText, ...rest } = args;
+  return { ...rest, edits: [...(Array.isArray(edits) ? edits : []), { oldText, newText }] };
+}
+
+function editPatch(toolName: string, recorded: Record<string, unknown>, sourceEventId: string, resultEventId: string): StagePatch | undefined {
   if (toolName === "edit") {
+    const args = normalizeEditArguments(recorded);
     const path = args.path;
     const rawEdits = args.edits;
     if (typeof path !== "string" || path.length === 0 || !Array.isArray(rawEdits) || rawEdits.length === 0) throw new Error("successful edit has invalid staging evidence");
@@ -196,8 +223,8 @@ function editPatch(toolName: string, args: Record<string, unknown>, sourceEventI
     return { path, operation: "edit", edits, content: undefined, sourceEventId, resultEventId };
   }
   if (toolName === "write") {
-    const path = args.path;
-    const content = args.content;
+    const path = recorded.path;
+    const content = recorded.content;
     if (typeof path !== "string" || path.length === 0 || typeof content !== "string") throw new Error("successful write has invalid staging evidence");
     return { path, operation: "write", edits: [], content, sourceEventId, resultEventId };
   }
@@ -299,7 +326,8 @@ export function collectStageFromSession(text: string): CollectedStage {
   }
   if (records.some(({ value }) => isObject(value) && value.type === "session_meta")) return collectCodexStage(records);
   // The same source detection and Claude Code adapter the analysis commands use.
-  const entries = detectSource(records) === "claude" ? claudeStageEntries(records) : records.map(({ value }) => value);
+  const claude = detectSource(records) === "claude";
+  const entries = claude ? claudeStageEntries(records) : records.map(({ value }) => value);
 
   for (const entry of entries) {
     if (!isObject(entry)) continue;
@@ -354,7 +382,7 @@ export function collectStageFromSession(text: string): CollectedStage {
     }
   }
 
-  return { sessionId, cwd, patches, bash };
+  return { agent: claude ? "claude" : "pi", sessionId, cwd, patches, bash };
 }
 
 /**

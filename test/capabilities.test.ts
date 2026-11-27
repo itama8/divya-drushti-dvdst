@@ -46,7 +46,8 @@ describe("capability catalog", () => {
     assert.ok(!Object.hasOwn(detail("message").options, "source"));
     assert.equal(detail("message").options.format!.effectiveDefault, "json");
     assert.deepEqual(detail("sessions").sessionSources, ["pi"]);
-    assert.deepEqual(detail("session-stage").sessionSources, ["claude", "codex"]);
+    assert.deepEqual(detail("session-stage").sessionSources, ["pi", "claude", "codex"]);
+    assert.ok(detail("session-stage").limitations.some(limit => /bash edits are never attributed/i.test(limit)));
     assert.deepEqual(detail("review").sessionSources, []);
     assert.ok(detail("review").limitations.some(limit => limit.includes("Pi")));
     assert.match(detail("files").output.schema!.description, /Exploration contract only/);

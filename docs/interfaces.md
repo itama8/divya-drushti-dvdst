@@ -114,16 +114,21 @@ Devlog generation preserves `stable` rather than upgrading it to acceptance.
 ## Recorded-change staging
 
 `stage` accepts a Pi live stream or supported session evidence.
-`session-stage --agent claude|codex` adds verified transcript discovery and
-mutation listing for Claude Code and Codex.
+`session-stage --agent pi|claude|codex` adds verified transcript discovery and
+mutation listing for Pi, Claude Code, and Codex. Pi discovery reads
+`PI_SESSION_FILE` or `PI_SESSION_ID`, which Pi exports to its bash tool.
 
 ```bash
 dvdst stage --session-file /path/to/pi-session.jsonl --cwd /path/to/repo --dry-run
+dvdst session-stage --agent pi --session-file /path/to/pi-session.jsonl --list
 dvdst session-stage --agent claude --session-file /path/to/transcript.jsonl --list
 dvdst session-stage --agent codex --session-file /path/to/rollout.jsonl --dry-run
 ```
 
-- Pi supports successful exact edits and new-file writes.
+- Pi supports successful exact edits and new-file writes from a live stream or
+  its session file, including Pi's own argument normalization (JSON-string or
+  single-object `edits`, legacy top-level `oldText`/`newText`). Forked session
+  files are refused.
 - Claude supports successful Edit calls, including intentional `replace_all`,
   and Write calls for paths absent from HEAD.
 - Codex supports successful Add File and exact Update File patch calls,
@@ -132,7 +137,8 @@ dvdst session-stage --agent codex --session-file /path/to/rollout.jsonl --dry-ru
   code, and other unsupported patch forms are refused.
 
 All routes replay recorded mutations from HEAD. They do not attribute arbitrary
-shell writes. A manifest pins HEAD and selects successful mutation IDs across
+shell writes: bash edits are reported only as `unattributedBash` warnings, and
+`session-stage --list` states their count on stderr. A manifest pins HEAD and selects successful mutation IDs across
 sessions in explicit order. `--after` selects changes after a verified result
 cursor following a commit. These tools stage and report conflicts. They do not
 commit, prove semantic correctness, or automatically recover commit receipts.
