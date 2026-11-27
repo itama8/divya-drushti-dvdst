@@ -60,8 +60,11 @@ dvdst overview --project my-project --source all --since 2026-10-01
 `PI_SESSION_FILE` if set; it does not automatically identify a current Claude
 or Codex conversation. `latest` means newest matching start time, and can name
 another concurrent agent. Inspect `overview.path`, `session`, and `firstPrompt`
-before relying on a discovered session. With no matching cwd, discovery can
-fall back to other projects; use `--project` or an exact file to constrain it.
+before relying on a discovered session. With no matching cwd, discovery falls
+back to every project of the selected source and says so on stderr
+(`dvdst: no ... sessions recorded for the working directory ...; selecting from
+every project instead`). Treat that notice as a wrong-scope warning: use
+`--project` or an exact file to constrain it.
 
 Default roots:
 
@@ -114,8 +117,12 @@ See [command discovery](command-discovery.md).
 | Need custom analysis? | `dvdst rows <extractor-file> "$SESSION"` | Project-defined rows |
 
 Read a schema before composing filters. Analysis output defaults to JSONL;
-`--format json` produces an array, and `--format tsv` is available. `--full`
-adds arguments and result text, which can be large:
+`--format json` produces a bare array, and `--format tsv` is available. `--full`
+adds arguments and result text, which can be large. An `--offset` past the
+matching rows returns no data and prints a stderr notice. Tool names differ by
+agent (Codex keeps `exec`, `write_stdin`, `wait`; Claude keeps `WebFetch`), so
+filter across agents with `calls --family shell|poll|read|edit|write|search|web|other`
+and keep `tool` for the raw name:
 
 ```bash
 dvdst schema calls --format json
@@ -123,6 +130,7 @@ dvdst calls "$SESSION" --errors --full \
   | jq -c '{session, line, callId, tool, exitCode, command, resultText}'
 dvdst calls "$SESSION" \
   | jq -c 'select((.mutates | length) > 0) | {session, line, mutates, isError}'
+dvdst calls --project my-project --source all --last 10 --family poll --fields session,tool,durationMs
 ```
 
 `calls` file effects include inferred shell reads/writes. Legacy direct `files` and
@@ -161,6 +169,9 @@ delegation prompts), `skill-expansion`, `notification`, `agent`, `tool`, or
 `unknown`; search hits carry `messageKind`. Filter with `--kind human` before
 counting what a person said. `human` means entered through the prompt path
 without a harness marker, not verified authorship; `unknown` is never `human`.
+Thinking- and tool-call-only assistant messages are rows with
+`text.totalChars: 0`; add `--nonempty` to `messages` to skip them (`seq` keeps
+the full numbering, so expect gaps).
 `search --in commands|results|all` adds other evidence; matching is literal,
 with optional `--ignore-case`. `message` defaults to two neighbors per side
 and 2000 characters per message, with tool exchanges and call links. It can
@@ -171,10 +182,16 @@ dvdst search "$SESSION" --query 'keep local Open' --role user --page
 dvdst message --ref '<messageRef copied from search>' --before 2 --after 2
 ```
 
-`--page` returns JSON row counts, `nextOffset`, and source-completeness metadata.
+Output shapes differ by flag: JSONL rows by default, a bare JSON array with
+`--format json`, and with `--page` one envelope object
+`{schemaVersion, rows, matched, offset, returned, nextOffset, complete, selectedSources, readSources, failedSources}`.
+Prefer `--page` for counts and continuation. `message` returns one object
+`{schemaVersion, source, session, path, fingerprint, anchorSeq, messages, beforeRef, afterRef}`;
+the anchor is the row under `messages` whose `seq` equals `anchorSeq`.
 Failed sources still cause nonzero exit. A hit on merged Claude text cites the
-matching source block; the message may begin earlier. Codex `channel` identifies
-analysis versus final/commentary text. See [conversation contracts](conversation-exploration.md)
+matching source block; the message may begin earlier. Codex `channel` is the
+recorded channel or, in newer rollouts, the `phase` (`commentary` or
+`final_answer`); it is null for Pi and Claude Code. See [conversation contracts](conversation-exploration.md)
 and `schema messages`, `schema search`, `schema message`.
 
 ## File, command, and skill queries
@@ -240,6 +257,12 @@ Claude/Codex live adapter or model reviewer is installed by DVDST.
   preserve byte ranges into their verbatim source snapshot.
 - Null cost, time, or outcome is unknown, not zero or successful. Findings are
   derived evidence; they do not establish correctness or product acceptance.
+- Cost is recorded, never priced by dvdst. Pi records per-request cost
+  (`overview.costBasis: requests`). Claude Code records only its own session
+  total in `cost-state` entries (`costBasis: session`; turns stay null; older
+  transcripts give null). Codex records no cost. Cross-agent cost comparison is
+  therefore impossible for Codex and approximate for Pi versus Claude Code:
+  both are the agents' own USD estimates on different bases.
 - `calls.mutates` and `unattributedBash` are inference, not proof. See
   [claim confidence](claim-confidence.md) for deterministic bands, unknown
   rows with path hints, and per-session coverage.
@@ -248,7 +271,7 @@ Claude/Codex live adapter or model reviewer is installed by DVDST.
   remain counted after successful retries; inspect latest attempts. `stable`
   describes limited validation evidence, not user acceptance. Opaque effects
   prevent that outcome; parallel edit/test dispatch does not prove ordering.
-- Claude omits cost, request start times, and system prompt sections. Main
+- Claude omits per-request cost, request start times, and system prompt sections. Main
   transcript conversion excludes sidechain entries.
 - Codex turns are recorded assistant response items, not guaranteed provider
   request counts. Recorded request usage is attached once. Base instructions

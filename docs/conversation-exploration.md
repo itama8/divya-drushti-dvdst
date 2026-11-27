@@ -15,7 +15,11 @@ dvdst call --ref '<callRefs item copied from a message>' --limit 2000
 Use the exact path from overview for a known session. Discovery for `messages`
 and `search` accepts the analysis file/ID/prefix/`latest` selectors, `--source`,
 `--project`, `--root`, `--last`, and `--since`. Existing scope caveats still
-apply: Pi is the default source and `latest` is not the calling agent.
+apply: Pi is the default source and `latest` is not the calling agent. When
+`--last`, `--since`, `--source`, or `latest` finds no sessions for the working
+directory, discovery selects from every project of that source and prints a
+`dvdst: no ... sessions recorded for the working directory ...` notice on
+stderr; stdout stays data. Pass `--project` or `--root` to choose explicitly.
 `schema messages`, `schema search`, and `schema message` describe every field;
 `schema` also lists them alongside existing stream and call schemas.
 
@@ -33,6 +37,20 @@ addresses the complete canonical conversation, including tool-only messages.
 Add `--full` to return complete text instead of a prefix; see
 [full text](#full-text).
 
+Assistant messages that hold only thinking or tool calls are still canonical
+messages, so they appear as rows with `text.totalChars: 0` (a busy Claude
+session can show dozens of `agent` rows per real reply). Add `--nonempty` to
+skip messages with no visible text:
+
+```bash
+dvdst messages "$SESSION" --role assistant --nonempty --full --fields seq,ref,text
+```
+
+`--nonempty` is a filter like `--role`: `matched` counts the remaining rows,
+`seq` still addresses the complete conversation (expect gaps), and
+`message --seq` or `--ref` opens the same message. It applies to `messages`
+only; `search` never matches empty text.
+
 Each row has session/source/path, canonical ID and sequence, source line/byte
 ranges, role, message `kind`, recorded `channel`, assistant turn and user-turn indices, bounded
 `text`, and snapshot-pinned `ref`. `callIds`/`callRefs` link assistant messages
@@ -44,8 +62,11 @@ Only recorded text blocks are rendered, joined with newlines. Thinking/reasoning
 block types, tool arguments, and image/binary payloads are not substituted for
 conversation text. This is not raw transcript search. Conversion still excludes
 Claude sidechains/meta entries and Codex event echoes, and covers only supplied
-segments. Codex `analysis`, `commentary`, or `final` channels are retained where
-recorded; analysis text is not evidence of a user-facing reply.
+segments. Codex channels are retained where recorded. Newer rollouts record no
+`channel` but a `phase` (`commentary` or `final_answer`) on assistant messages;
+dvdst reports that phase verbatim as `channel`. Older rollouts may carry
+`analysis`, `commentary`, or `final`. Pi and Claude Code record no channel, so
+it is null. Analysis or commentary text is not evidence of a user-facing reply.
 
 Claude can merge several entries into one canonical message. Its row's `line`,
 `byteStart`, and `byteEnd` describe the first entry; `sources` includes other
@@ -143,8 +164,17 @@ Full text can be large; project only the fields you need and page with
 
 ## Neighborhoods and continuation
 
-`message` writes JSON with `anchorSeq`, up to two messages before/after by
-default, and `beforeRef`/`afterRef` for the nearest omitted neighbors. Windows
+`message` writes one JSON object, not rows:
+
+```text
+{schemaVersion, source, session, path, fingerprint, anchorSeq, messages, beforeRef, afterRef}
+```
+
+The anchor and its neighbors are `messages`-schema rows under `messages`; pick
+the anchor with `seq === anchorSeq`. There is no top-level `message` or `text`
+key. `dvdst schema message` and `message --help` state the same keys. By
+default the window holds up to two messages before/after, and
+`beforeRef`/`afterRef` name the nearest omitted neighbors. Windows
 include all roles, preserving nearby tools. Set `--before`/`--after` from 0 to
 10; use 0/0 to inspect just the anchor.
 
@@ -162,16 +192,31 @@ They do not join forks or missing history.
 
 ## Formats, pagination, and completeness
 
-`messages`/`search` default to JSONL; `--format json` writes an array and
-`--format tsv` writes schema-ordered columns. Both accept `--fields`, `--limit`
+`messages`/`search` write one of three shapes:
+
+| Flags | Stdout |
+| --- | --- |
+| default (`--format jsonl`) | one row object per line |
+| `--format json` | one bare JSON array of rows, with no counts |
+| `--page` | one JSON envelope object; rows are under `rows` |
+| `--format tsv` | a header line, then schema-ordered columns |
+
+The bare array is kept for existing callers. Use `--page` whenever counts,
+continuation, or source completeness matter. Both accept `--fields`, `--limit`
 (rows), `--offset` (rows), and `--text-limit` (1–4096 characters) or `--full`
 (complete text), plus `--role` and `--kind` filters. Pagination
 follows filtering across selected files. Bounded `text`/`excerpt` projection
 needs no `--full`. Complete files are still parsed: no text index, parser-memory
 bound, or use of the payload-free row cache is implied.
 
-`--page` writes a JSON envelope with `rows`, `matched`, `returned`, `nextOffset`,
-`complete`, `selectedSources`, `readSources`, and `failedSources`. It implies
+`--page` writes a JSON envelope with `schemaVersion`, `rows`, `matched`,
+`offset`, `returned`, `nextOffset`, `complete`, `selectedSources`,
+`readSources`, and `failedSources`. An `--offset` at or past `matched` gives
+`returned: 0` and `nextOffset: null`. Without `--page`, stdout stays pure data
+(nothing for JSONL, `[]`, or only the TSV header) and stderr says
+`dvdst: --offset N is at or past the M matching row(s); no rows returned`. The
+analysis streams (`overview`, `turns`, `calls`, `context`) print the same
+notice. It implies
 JSON and rejects other formats. `complete` means every selected source was
 read, not every hit was returned. Counts/continuation cover successfully read
 files only. Unreadable sources cause nonzero exit even after the page fills.
@@ -183,7 +228,7 @@ pagination, not snapshot cursors; refresh discovery if selected files change.
 `loadConversation`, `conversationFromSession`, `listMessages`,
 `searchConversation`, and `readMessage` are exported from `dvdst` and used by
 the CLI. Listing/search return typed `{rows, matched, nextOffset}` pages with
-the same defaults. `conversationFromSession` reuses a fully loaded `SessionData`.
+the same defaults; `listMessages` accepts `nonempty: true`. `conversationFromSession` reuses a fully loaded `SessionData`.
 Loaded conversations include full text for local computation; only query/read
 results apply output limits; pass `full: true` for complete text and `kinds`
 to filter. `MESSAGE_KINDS` and `classifyMessage` expose the kind vocabulary and

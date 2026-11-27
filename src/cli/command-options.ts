@@ -54,7 +54,7 @@ const textOffset = s("Zero-based Unicode code-point offset.", { valueType: "inte
 
 export const CLI_OPTIONS = {
   analysis: {
-    ...selection, tool: s("Exact normalized tool name; calls only."), id: s("Exact call ID; calls only."), seq,
+    ...selection, tool: s("Exact normalized tool name; calls only."), family: s("Cross-agent tool family; calls only. Matches calls.family.", { choices: ["shell", "poll", "read", "edit", "write", "search", "web", "other"] }), id: s("Exact call ID; calls only."), seq,
     class: s("Command classification; calls only."), ...rows,
     errors: b("Only calls with an explicitly failed result.", { default: false }),
     full: b("Add call arguments/result text and context section text; does not add turns text.", { default: false }),
@@ -69,7 +69,9 @@ export const CLI_OPTIONS = {
     "ignore-case": b("Use Unicode simple case folding for literal search."), ...rows,
     "text-limit": s("Characters per returned prefix/excerpt; mutually exclusive with --full.", { valueType: "integer", minimum: 1, maximum: 4096, effectiveDefault: 240 }),
     full: b("Return complete message text (search: the whole matched text as the excerpt) with no character bound; mutually exclusive with --text-limit."),
-    format: rowFormat, page: b("Return JSON counts, nextOffset, completeness, and failed sources; implies JSON format."),
+    nonempty: b("messages only: skip messages with no visible text (thinking- or tool-call-only). seq still addresses the full canonical conversation, so seq gaps are expected; matched counts the remaining rows."),
+    format: s("Output encoding. jsonl: one row per line. json: a bare JSON array of rows. --page always returns a JSON envelope object with rows under rows.", { choices: ["jsonl", "json", "tsv"], effectiveDefault: "jsonl" }),
+    page: b("Return one JSON envelope object {schemaVersion, rows, matched, offset, returned, nextOffset, complete, selectedSources, readSources, failedSources} instead of bare rows; implies JSON format."),
     ref, seq, before: s("Canonical messages before the anchor.", { valueType: "integer", minimum: 0, maximum: 10, effectiveDefault: 2 }),
     after: s("Canonical messages after the anchor.", { valueType: "integer", minimum: 0, maximum: 10, effectiveDefault: 2 }),
     "text-offset": textOffset, help,
@@ -116,7 +118,7 @@ export const CLI_OPTIONS = {
 
 export const CONVERSATION_ALLOWED = {
   message: ["ref", "seq", "before", "after", "limit", "text-offset", "format", "help"],
-  messages: ["source", "project", "root", "last", "since", "role", "kind", "limit", "offset", "text-limit", "full", "fields", "format", "page", "help"],
+  messages: ["source", "project", "root", "last", "since", "role", "kind", "nonempty", "limit", "offset", "text-limit", "full", "fields", "format", "page", "help"],
   search: ["source", "project", "root", "last", "since", "role", "kind", "limit", "offset", "text-limit", "full", "fields", "format", "page", "query", "in", "ignore-case", "help"],
 } as const;
 

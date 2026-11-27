@@ -64,7 +64,7 @@ before pagination, across all selected segments in resolver order.
 
 `--page` implies JSON and rejects an explicit non-JSON format. It returns:
 
-- `schemaVersion: 1`, `rows`, `matched`, `returned`, and `nextOffset` (null at end).
+- `schemaVersion: 1`, `rows`, `matched`, `offset` (the requested offset), `returned`, and `nextOffset` (null at end). Without `--page`, an `--offset` at or past `matched` prints a stderr notice and stdout stays pure data.
 - `complete`, `selectedSources`, `readSources`, and `failedSources` containing
   `{path,error}` diagnostics. Every selected source is read, even after the page
   fills. A failed source causes exit 1; counts/continuation cover readable sources.

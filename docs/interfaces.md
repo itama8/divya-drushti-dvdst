@@ -47,21 +47,35 @@ complete text). Message rows carry `kind` (`human`, `injected`,
 `skill-expansion`, `notification`, `agent`, `tool`, `unknown`) and search hits
 carry `messageKind`; `--kind` filters on it. `message` returns
 JSON with a bounded neighborhood, text continuation, and omitted-neighbor refs;
-it can also anchor from a call ref. Conversation queries offer `--page` counts,
-continuation, and failed-source metadata. Search cites matched Claude text/call
-blocks, not only their merged message's first line. Codex channels are retained.
+it can also anchor from a call ref; its object keys are `schemaVersion`,
+`source`, `session`, `path`, `fingerprint`, `anchorSeq`, `messages`,
+`beforeRef`, and `afterRef`. `--format json` is a bare row array, while
+`--page` returns an envelope with counts (`matched`, `offset`, `returned`),
+continuation, and failed-source metadata. `messages --nonempty` skips
+thinking- and tool-call-only messages without renumbering `seq`. An `--offset`
+at or past the matched rows prints a stderr notice outside `--page`. Search cites matched Claude text/call
+blocks, not only their merged message's first line. Codex channels are retained,
+using the recorded `phase` (`commentary`, `final_answer`) when newer rollouts
+record no `channel`.
 Thinking/reasoning blocks, binary payloads, excluded entries, and missing history
 are not invented as message text. See [conversation exploration](conversation-exploration.md).
 
 Claude conversion normalizes core tools to `bash`, `read`, `edit`, and `write`.
-It excludes sidechain entries. Missing cost and generation timing stay null,
+It excludes sidechain entries. Per-request cost and generation timing stay
+null; `overview.cost` is Claude Code's recorded `cost-state` session total
+(`costBasis: session`) when present,
 and there are no Claude system prompt rows. Codex rollouts feed the same commands. `--source codex` discovers rollouts
 under `$CODEX_HOME/sessions` (default `~/.codex/sessions`), using recorded cwd
 for project selection. Codex context exposes recorded base instructions only.
 Its turns are assistant response items, rather than a guaranteed count of
 provider requests. `last_token_usage` is attached once to the preceding
-assistant item; cached input is separated from uncached input. Missing cost
-and request start times remain null. Event echoes do not count as prompts.
+assistant item; cached input is separated from uncached input. Codex records
+no cost, so cost and request start times remain null. Event echoes do not
+count as prompts. `calls.family` (`shell`, `poll`, `read`, `edit`, `write`,
+`search`, `web`, `other`) and `overview.families` group each agent's raw tool
+names, such as Codex `write_stdin`/`wait` (`poll`) and `exec` (`shell`), for
+cross-agent filters with `calls --family`. Discovery that falls back from the
+working directory to every project prints a stderr notice.
 
 Native shell calls and literal `functions.exec` batches with a complete,
 unambiguous result list become command rows. Complex scripts stay opaque

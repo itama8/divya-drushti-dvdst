@@ -23,6 +23,12 @@ export interface ResolveSessionsOptions {
   cwd?: string;
   env?: Record<string, string | undefined>;
   home?: string;
+  /**
+   * Receives human-readable discovery notices, such as falling back from the
+   * working directory's projects to every project. Defaults to stderr, so
+   * stdout stays machine-readable; pass a no-op to silence it.
+   */
+  onNotice?: (message: string) => void;
 }
 
 export class SessionResolveError extends Error {
@@ -179,6 +185,8 @@ interface Roots {
   implicit: boolean;
   /** Directories to search when an id matches nothing in `directories`. */
   widen?: () => Promise<string[]>;
+  /** Set when no session matched the working directory and every project of the source is used instead. */
+  fallback?: string;
 }
 
 async function sessionRoots(options: ResolveSessionsOptions, home: string, source: SourceSelection): Promise<Roots> {
@@ -210,7 +218,10 @@ async function sessionRoots(options: ResolveSessionsOptions, home: string, sourc
     if (await isDirectory(directory)) forCwd.push(directory);
   }
   if (forCwd.length > 0 || codex.length > 0) return { directories: [...forCwd, ...codex], implicit: true };
-  return { directories: [...await projectDirectories(home, layouts), ...(source === "codex" || source === "all" ? await codexFiles(home, options) : [])], implicit: false };
+  return {
+    directories: [...await projectDirectories(home, layouts), ...(source === "codex" || source === "all" ? await codexFiles(home, options) : [])], implicit: false,
+    fallback: `no ${source === "all" ? "pi, claude, or codex" : source} sessions recorded for the working directory ${resolve(cwd)}; selecting from every project instead. Pass --project <name> or --root <dir> to choose, or run from the project directory.`,
+  };
 }
 
 function sinceKey(since: string): string {
@@ -222,11 +233,12 @@ function matchesSpec(entry: Candidate, spec: string): boolean {
   return entry.filename.startsWith(spec) || (entry.id !== undefined && entry.id.startsWith(spec));
 }
 
-async function resolveSpec(spec: string, roots: Roots): Promise<Candidate[]> {
+async function resolveSpec(spec: string, roots: Roots, notice: (message: string) => void): Promise<Candidate[]> {
   if (await isFile(spec)) return [await candidate(spec)];
   if (await isDirectory(spec)) return candidatesIn([spec]);
 
   if (spec === "latest") {
+    if (roots.fallback !== undefined) notice(roots.fallback);
     const newest = (await candidatesIn(roots.directories)).at(-1);
     if (newest === undefined) throw new SessionResolveError(`No session files under ${roots.directories.join(", ")}`);
     return [newest];
@@ -267,6 +279,7 @@ export async function resolveSessions(options: ResolveSessionsOptions): Promise<
   const home = options.home ?? homedir();
   const env = options.env ?? process.env;
   const source = selectedSource(options);
+  const notice = options.onNotice ?? ((message: string) => { process.stderr.write(`dvdst: ${message}\n`); });
   const selecting = options.last !== undefined || options.since !== undefined || options.root !== undefined || options.project !== undefined || options.source !== undefined;
   if (options.last !== undefined && (!Number.isSafeInteger(options.last) || options.last < 1)) {
     throw new SessionResolveError("--last must be a whole number of at least 1");
@@ -284,7 +297,7 @@ export async function resolveSessions(options: ResolveSessionsOptions): Promise<
     const seen = new Set<string>();
     candidates = [];
     for (const spec of options.specs) {
-      for (const entry of await resolveSpec(spec, spec === "latest" ? roots : idRoots)) {
+      for (const entry of await resolveSpec(spec, spec === "latest" ? roots : idRoots, notice)) {
         if (!seen.has(entry.path)) {
           seen.add(entry.path);
           candidates.push(entry);
@@ -292,7 +305,9 @@ export async function resolveSessions(options: ResolveSessionsOptions): Promise<
       }
     }
   } else if (selecting) {
-    candidates = await candidatesIn((await sessionRoots(options, home, source)).directories);
+    const roots = await sessionRoots(options, home, source);
+    if (roots.fallback !== undefined) notice(roots.fallback);
+    candidates = await candidatesIn(roots.directories);
   } else {
     const current = env.PI_SESSION_FILE;
     if (current === undefined || current.length === 0) {

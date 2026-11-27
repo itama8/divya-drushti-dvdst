@@ -1,5 +1,6 @@
 import { basename, relative, resolve } from "node:path";
 import { parseBashEffects } from "../pi/bash-effects.js";
+import { TOOL_FAMILY_DESCRIPTION, toolFamily } from "./tool-family.js";
 import { classifyCommand, type CommandClassRule } from "../pi/classify-commands.js";
 import { isObject, type SourceRecord } from "../pi/read-jsonl.js";
 import { sessionIdFromFilename } from "../pi/sessions.js";
@@ -54,13 +55,15 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("maxFailureRun", "number", "Longest run of consecutive failed tool calls."),
       field("inlineScriptCalls", "number", "Bash calls that ran a script typed into the command, such as node -e or a python heredoc."),
       field("tools", "object", "Tool call count by tool name."),
+      field("families", "object", "Tool call count by cross-agent family (calls.family): shell, poll, read, edit, write, search, web, other."),
       field("callsBeforeFirstMutation", "number|null", "Tool calls before the first edit, write, or apply_patch call. Bash mutations do not count. Null when no such call is recorded."),
       field("inputTokens", "number", "Sum of uncached input tokens over all turns."),
       field("outputTokens", "number", "Sum of output tokens over all turns."),
       field("cacheReadTokens", "number", "Sum of cache-read tokens over all turns."),
       field("cacheWriteTokens", "number", "Sum of cache-write tokens over all turns."),
       field("peakContextTokens", "number", "Largest input plus cache-read plus cache-write of any one turn."),
-      field("cost", "number|null", "Sum of the cost recorded per turn, in the provider's currency. Null when the source records no cost, as with Claude Code."),
+      field("cost", "number|null", "Recorded cost, never priced by dvdst. Pi: sum of the per-request cost Pi recorded (costBasis requests). Claude Code: the session total from its last cost-state entry, Claude Code's own USD estimate (costBasis session); older transcripts without one, or an estimate flagged with unknown-model pricing, give null. Codex records no cost: null. Null means unknown, not zero; bases differ, so compare across agents only when both are non-null and say which basis each uses."),
+      field("costBasis", "string|null", "requests (summed per-request cost), session (agent-recorded session total), or null when cost is unknown."),
       field("resultBytes", "number", "Sum of tool result text bytes."),
       field("systemPromptBytes", "number", "Bytes of the first system prompt, over all of its sections. 0 when the source does not record it, as with Claude Code."),
       field("compactions", "number", "Compaction entries."),
@@ -86,7 +89,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("cacheWriteTokens", "number", "Input tokens written to cache."),
       field("reasoningTokens", "number", "Reasoning tokens, where the provider reports them."),
       field("contextTokens", "number", "inputTokens plus cacheReadTokens plus cacheWriteTokens: the context this request carried."),
-      field("cost", "number|null", "Cost recorded for the request. Null when the source records none."),
+      field("cost", "number|null", "Cost recorded for the request. Null when the source records none: Claude Code and Codex never record per-request cost (see overview.cost for Claude Code's session total)."),
       field("textBytes", "number", "Bytes of visible text in the message."),
       field("thinkingBytes", "number", "Bytes of thinking text in the message."),
       field("calls", "number", "Tool calls in the message."),
@@ -105,6 +108,7 @@ export const STREAMS: Record<StreamName, StreamSpec> = {
       field("callId", "string", "Tool call id. Joins to toolCallId in the store streams."),
       field("ref", "string|null", "Exact call reference for dvdst call --ref. Pins the file and raw snapshot; refresh after any file change. Null for rows derived without a fingerprint."),
       field("tool", "string", "Tool name. The core tools are bash, read, edit, and write for every source; other tools keep the name their agent gives them."),
+      field("family", "string", TOOL_FAMILY_DESCRIPTION),
       field("model", "string|null", "Model that made the call."),
       field("path", "string|null", "The path argument. Relative to the session cwd when inside it."),
       field("command", "string|null", "The command argument of a bash call, in full."),
@@ -214,6 +218,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
   let cwd: string | null = null;
   let source = "pi";
   let startedAt: string | null = null;
+  let sessionCost: number | null | undefined;
   let endedAt: string | null = null;
   let firstPrompt: string | undefined;
   let userTurn = 0;
@@ -239,6 +244,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
       if (typeof entry.id === "string") session = entry.id;
       cwd = stringOrNull(entry.cwd);
       if (typeof entry.source === "string") source = entry.source;
+      if (typeof entry.sessionCost === "number" || entry.sessionCost === null) sessionCost = entry.sessionCost;
       startedAt = entryTime;
       continue;
     }
@@ -316,6 +322,7 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
           callId: block.id,
           ref: options.fingerprint === undefined ? null : encodeCallReference({ v: 1, path: resolve(sourcePath), fingerprint: options.fingerprint, callId: block.id as string, line }),
           tool: block.name,
+          family: toolFamily(block.name as string),
           model,
           path,
           command,
@@ -397,9 +404,14 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
   }
 
   const tools: Record<string, number> = {};
-  for (const call of calls) tools[call.tool as string] = (tools[call.tool as string] ?? 0) + 1;
+  const families: Record<string, number> = {};
+  for (const call of calls) {
+    tools[call.tool as string] = (tools[call.tool as string] ?? 0) + 1;
+    families[call.family as string] = (families[call.family as string] ?? 0) + 1;
+  }
   const firstMutation = calls.findIndex((call) => MUTATING_TOOLS.has(call.tool as string) || call.tool === "apply_patch");
   const sum = (rows: Row[], key: string): number => rows.reduce((total, row) => total + numberOrZero(row[key]), 0);
+  const requestCost = turns.some((row) => row.cost !== null);
 
   const overview: Row = {
     session,
@@ -422,13 +434,15 @@ export function deriveRows(records: SourceRecord[], sourcePath: string, options:
     maxFailureRun: calls.reduce((longest, call) => Math.max(longest, call.failureRun as number), 0),
     inlineScriptCalls: calls.filter((call) => (call.classes as string[]).includes("inline-script")).length,
     tools: Object.fromEntries(Object.entries(tools).sort(([left], [right]) => left.localeCompare(right))),
+    families: Object.fromEntries(Object.entries(families).sort(([left], [right]) => left.localeCompare(right))),
     callsBeforeFirstMutation: firstMutation < 0 ? null : firstMutation,
     inputTokens: sum(turns, "inputTokens"),
     outputTokens: sum(turns, "outputTokens"),
     cacheReadTokens: sum(turns, "cacheReadTokens"),
     cacheWriteTokens: sum(turns, "cacheWriteTokens"),
     peakContextTokens: turns.reduce((peak, row) => Math.max(peak, numberOrZero(row.contextTokens)), 0),
-    cost: turns.some((row) => row.cost !== null) ? sum(turns, "cost") : null,
+    cost: requestCost ? sum(turns, "cost") : sessionCost ?? null,
+    costBasis: requestCost ? "requests" : typeof sessionCost === "number" ? "session" : null,
     resultBytes: sum(calls, "resultBytes"),
     systemPromptBytes: systemPromptBytes ?? 0,
     compactions,
