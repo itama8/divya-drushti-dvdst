@@ -128,7 +128,7 @@ export function codexToCanonical(records: SourceRecord[]): SourceRecord[] {
         const parts = Array.isArray(p.content) ? p.content.filter(isObject).map(block => typeof block.text === "string" ? normalized(block.text) : "").filter(Boolean) : [];
         const origin = p.role !== "user" || submitted === undefined ? undefined
           : submitted.has(normalized(text(p.content))) || parts.some(part => submitted.has(part)) ? "submitted" : "injected";
-        const message = { role: p.role, model, provider, thinkingLevel: effort, ...(typeof p.channel === "string" ? { channel: p.channel } : {}), ...(origin === undefined ? {} : { origin }), content: [{ type: "text", text: text(p.content) }] };
+        const message = { role: p.role, model, provider, thinkingLevel: effort, ...(typeof p.channel === "string" ? { channel: p.channel } : typeof p.phase === "string" ? { channel: p.phase } : {}), ...(origin === undefined ? {} : { origin }), content: [{ type: "text", text: text(p.content) }] };
         emit({ type: "message", message });
         if (p.role === "assistant") { lastAssistant = message; usageAssigned = false; }
       } else if ((p.type === "function_call" || p.type === "custom_tool_call") && typeof p.call_id === "string" && typeof p.name === "string") {

@@ -12,6 +12,11 @@ export function queryFormat(format: string | undefined, page: boolean): string {
   if (page && selected !== "json") throw new Error("--page requires JSON output; omit --format or use --format json.");
   return selected;
 }
+/** Stderr notice for an --offset at or past the matched rows; stdout stays pure data. */
+export function offsetNotice(offset: number, matched: number): string {
+  return `dvdst: --offset ${offset} is at or past the ${matched} matching row(s); no rows returned. Use a smaller --offset, or --page for counts.`;
+}
+
 const cell = (value: unknown) => (value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value)).replace(/[\t\n\r]/g, " ");
 
 /** Shared global pagination/projection and partial-source contract for evidence queries. */
@@ -47,9 +52,11 @@ export async function emitQuery(options: {
     }
   }
   if (format === "json") process.stdout.write(`${JSON.stringify(options.page ? {
-    schemaVersion: 1, ...options.metadata, rows, matched, returned, nextOffset: offset + returned < matched ? offset + returned : null,
+    schemaVersion: 1, ...options.metadata, rows, matched, offset, returned, nextOffset: offset + returned < matched ? offset + returned : null,
     complete: failures.length === 0, selectedSources: paths.length, readSources: paths.length - failures.length, failedSources: failures,
   } : rows)}\n`);
+  // The --page envelope already carries matched, offset, and returned.
+  if (!options.page && offset > 0 && offset >= matched) console.error(offsetNotice(offset, matched));
   if (failures.length > 0) {
     console.error(`${failures.length} of ${paths.length} sessions could not be read`);
     process.exitCode = 1;

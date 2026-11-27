@@ -9,6 +9,8 @@ import { resolveSessions, type SourceSelection } from "../pi/resolve-sessions.js
 import { guardStdout } from "./stdout.js";
 import { integerOption } from "../analysis/read-call.js";
 import { EXPLORATION_SCHEMAS } from "../analysis/schemas.js";
+import { TOOL_FAMILIES } from "../analysis/tool-family.js";
+import { offsetNotice } from "./query-output.js";
 
 guardStdout();
 
@@ -18,7 +20,7 @@ const FULL_ONLY = ["args", "resultText", "text"];
 
 function usage(status = 2): never {
   console.error("Usage: dvdst <overview|turns|calls|context> [session...] [--last <n>] [--since <date>] [--root <dir>] [--project <name>] [--source pi|claude|codex|all]");
-  console.error("                                                  [--tool <name>] [--errors] [--full] [--config <file>] [--no-cache] [--format jsonl|json|tsv]");
+  console.error("                                                  [--tool <name>] [--family <family>] [--errors] [--full] [--config <file>] [--no-cache] [--format jsonl|json|tsv]");
   console.error("       calls also accepts --id <callId>, --seq <n>, --class <name>.");
   console.error("       Built-in streams accept --fields <comma-separated names>, --limit <rows>, --offset <rows> (after filtering, across sessions).");
   console.error("       dvdst rows <extractor|file> [session...]   run a project extractor with the same selection and format options");
@@ -133,11 +135,14 @@ async function main(): Promise<void> {
 
   const format = values.format ?? "jsonl";
   if (format !== "jsonl" && format !== "json" && format !== "tsv") usage();
-  if ((values.tool !== undefined || values.errors || values.id !== undefined || values.seq !== undefined || values.class !== undefined) && builtIn !== "calls") {
-    throw new Error("--tool, --errors, --id, --seq and --class filter the calls stream only");
+  if ((values.tool !== undefined || values.family !== undefined || values.errors || values.id !== undefined || values.seq !== undefined || values.class !== undefined) && builtIn !== "calls") {
+    throw new Error("--tool, --family, --errors, --id, --seq and --class filter the calls stream only");
   }
+  if (values.family !== undefined && !(TOOL_FAMILIES as readonly string[]).includes(values.family)) throw new Error(`--family must be one of ${TOOL_FAMILIES.join(", ")}`);
   const limit = integerOption(values.limit, "--limit", 1);
-  let skip = integerOption(values.offset, "--offset", 0) ?? 0;
+  const offset = integerOption(values.offset, "--offset", 0) ?? 0;
+  let skip = offset;
+  let matched = 0;
   const seq = integerOption(values.seq, "--seq", 1);
   const fields = values.fields?.split(",");
   if (builtIn === undefined && (fields !== undefined || limit !== undefined || values.offset !== undefined)) throw new Error("--fields, --limit and --offset currently apply to built-in streams only.");
@@ -184,11 +189,13 @@ async function main(): Promise<void> {
       continue;
     }
     if (values.tool !== undefined) rows = rows.filter((row) => row.tool === values.tool);
+    if (values.family !== undefined) rows = rows.filter((row) => row.family === values.family);
     if (values.errors) rows = rows.filter((row) => row.isError === true);
     if (values.id !== undefined) rows = rows.filter(row => row.callId === values.id);
     if (seq !== undefined) rows = rows.filter(row => row.seq === seq);
     if (values.class !== undefined) rows = rows.filter(row => (row.classes as string[]).includes(values.class!));
     if (builtIn !== undefined) {
+      matched += rows.length;
       const dropped = Math.min(skip, rows.length);
       skip -= dropped;
       rows = rows.slice(dropped, limit === undefined ? undefined : dropped + Math.max(0, limit - emitted));
@@ -209,6 +216,8 @@ async function main(): Promise<void> {
       writeTsv(declared ?? [...new Set(rows.flatMap((row) => Object.keys(row)))], rows);
     }
   }
+  // Stdout stays pure data; an exhausted offset is said on stderr.
+  if (builtIn !== undefined && offset > 0 && offset >= matched) console.error(offsetNotice(offset, matched));
   if (failed > 0) {
     console.error(`${failed} of ${paths.length} sessions could not be read`);
     process.exitCode = 1;

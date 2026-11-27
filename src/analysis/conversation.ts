@@ -128,6 +128,8 @@ export interface ConversationQueryOptions {
   textLimit?: number;
   /** Return complete text instead of a --text-limit prefix/excerpt. */
   full?: boolean;
+  /** messages only: skip messages with no visible (non-whitespace) text. seq is unchanged. */
+  nonempty?: boolean;
 }
 export interface EvidencePage<T> { rows: T[]; matched: number; nextOffset: number | null }
 
@@ -152,7 +154,8 @@ function kindMatches(kind: MessageKind, kinds: KindSelection | undefined) {
 
 export function listMessages(conversation: Conversation, options: ConversationQueryOptions = {}): EvidencePage<MessageRow> {
   const { offset, limit, textLimit, full } = queryOptions(options);
-  const matching = conversation.messages.filter(message => roleMatches(message.metadata.role, options.roles, ["user", "assistant"]) && kindMatches(message.metadata.kind, options.kinds));
+  const matching = conversation.messages.filter(message => roleMatches(message.metadata.role, options.roles, ["user", "assistant"]) && kindMatches(message.metadata.kind, options.kinds)
+    && (options.nonempty !== true || /\S/u.test(message.text)));
   const rows = matching.slice(offset, offset + limit).map(message => ({ ...message.metadata, text: full ? wholeText(message.text) : sliceText(message.text, 0, textLimit) }));
   return { rows, matched: matching.length, nextOffset: offset + rows.length < matching.length ? offset + rows.length : null };
 }

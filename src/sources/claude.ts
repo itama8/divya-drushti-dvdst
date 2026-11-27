@@ -80,6 +80,14 @@ export function claudeToCanonical(records: SourceRecord[]): SourceRecord[] {
       if (header.version === undefined && typeof entry.version === "string") header.version = entry.version;
     }
 
+    // Claude Code's cost-state bookkeeping records its own cumulative USD
+    // estimate for the session; per-request cost is never recorded. The last
+    // entry wins. An estimate with unknown-model pricing is incomplete, so it
+    // becomes null (unknown) rather than an undercount.
+    if (entry.type === "cost-state") {
+      if (header !== undefined) header.sessionCost = entry.hasUnknownModelCost === true || typeof entry.totalCostUSD !== "number" || !Number.isFinite(entry.totalCostUSD) ? null : entry.totalCostUSD;
+      continue;
+    }
     if (entry.type === "system" && entry.subtype === "compact_boundary") {
       output.push({ value: { type: "compaction", id: entry.uuid, timestamp }, source: record.source });
       continue;
