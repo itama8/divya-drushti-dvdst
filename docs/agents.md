@@ -235,14 +235,17 @@ Store commands with `--session <id>` refuse an ID shared by multiple agents;
 [session ingestion](session-ingestion.md) and [findings](events.md).
 
 Staging is an optional index mutation workflow. It replays supported edits from
-HEAD, never commits, and does not attribute arbitrary shell writes:
+HEAD, never commits, and does not attribute arbitrary shell writes (bash edits
+are never staged; they appear only as warnings):
 
 ```bash
-dvdst session-stage --agent codex --session-file "$SESSION" --list
-dvdst session-stage --agent codex --session-file "$SESSION" --cwd /path/to/repo --dry-run
+dvdst session-stage --agent pi --session-file "$SESSION" --list
+dvdst session-stage --agent pi --session-file "$SESSION" --repository /path/to/repo --dry-run
 ```
 
-Use `--agent claude` for Claude Code. Follow
+Use `--agent claude` for Claude Code and `--agent codex` for Codex. Inside a
+running Pi session, `--session-file` can be omitted: Pi exports
+`PI_SESSION_FILE` and `PI_SESSION_ID` to its bash tool. Follow
 [session staging](session-staging.md) and [manifests](stage-manifests.md) before
 publishing changes to the index. Ordinary reviewed Git staging is also valid.
 The bundled live recorder and settled review frames remain Pi-only; no bundled

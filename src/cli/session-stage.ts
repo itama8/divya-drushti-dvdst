@@ -5,13 +5,35 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { guardStdout } from "./stdout.js";
-import { collectStageFromFile, stageChanges } from "../stage/stage.js";
+import { sessionIdFromFilename } from "../pi/sessions.js";
+import { detectSource } from "../sources/read-session.js";
+import { collectStageFromFile, inspectBash, stageChanges } from "../stage/stage.js";
 
 guardStdout();
 const cancellation = new AbortController();
 const cancel = () => cancellation.abort(new Error("staging interrupted"));
 process.on("SIGINT", cancel);
 process.on("SIGTERM", cancel);
+
+function transcriptName(agent: string, name: string, session: string): boolean {
+  if (agent === "claude") return name === `${session}.jsonl`;
+  if (agent === "pi") return sessionIdFromFilename(name) === session;
+  return name.startsWith("rollout-") && name.endsWith(`-${session}.jsonl`);
+}
+
+// Pi's own storage roots: PI_CODING_AGENT_SESSION_DIR, else PI_CODING_AGENT_DIR/sessions.
+// A --session-dir flag or settings-file location is only visible through PI_SESSION_FILE.
+function transcriptRoot(agent: string): string {
+  if (agent === "claude") return join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects");
+  if (agent === "codex") return join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "sessions");
+  return process.env.PI_CODING_AGENT_SESSION_DIR ?? join(process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent"), "sessions");
+}
+
+function environmentSession(agent: string): string | undefined {
+  return agent === "claude" ? process.env.CLAUDE_CODE_SESSION_ID : agent === "codex" ? process.env.CODEX_THREAD_ID : process.env.PI_SESSION_ID;
+}
+
+const BASH_NOTE = "bash edits are never attributed, listed, or staged";
 
 async function findTranscript(root: string, agent: string, session: string): Promise<string> {
   if (!/^[A-Za-z0-9_-]+$/.test(session)) throw new Error("invalid session identity");
@@ -23,7 +45,7 @@ async function findTranscript(root: string, agent: string, session: string): Pro
     for (const entry of entries) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) await visit(path);
-      else if (entry.isFile() && (agent === "claude" ? entry.name === `${session}.jsonl` : entry.name.startsWith("rollout-") && entry.name.endsWith(`-${session}.jsonl`))) matches.push(path);
+      else if (entry.isFile() && transcriptName(agent, entry.name, session)) matches.push(path);
     }
   }
   await visit(root);
@@ -37,32 +59,35 @@ async function main(): Promise<void> {
     options: parserOptions(CLI_OPTIONS.sessionStage), strict: true,
   });
   if (values.help) {
-    console.log("Usage: dvdst session-stage --agent claude|codex [--session <id> | --session-file <file>] [--repository <dir>] [--manifest <file>] [--after <result-event-id>] [--dry-run | --list]");
+    console.error("Usage: dvdst session-stage --agent pi|claude|codex [--session <id> | --session-file <file>] [--repository <dir>] [--manifest <file>] [--after <result-event-id>] [--dry-run | --list]");
+    console.error("Discovery without --session-file: Pi uses PI_SESSION_FILE, else PI_SESSION_ID; Claude uses CLAUDE_CODE_SESSION_ID; Codex uses CODEX_THREAD_ID. Bash edits are never attributed or staged. Never commits.");
     return;
   }
   const agent = values.agent;
-  if (agent !== "claude" && agent !== "codex") throw new Error("--agent must be claude or codex");
+  if (agent !== "pi" && agent !== "claude" && agent !== "codex") throw new Error("--agent must be pi, claude, or codex");
   if (values.list && (values.manifest || values["dry-run"])) throw new Error("--list cannot be combined with --manifest or --dry-run");
   if (values.manifest && (values["session-file"] || values.after)) throw new Error("--manifest cannot be combined with --session-file or --after");
-  let session = values.session ?? (values["session-file"] ? undefined : agent === "claude" ? process.env.CLAUDE_CODE_SESSION_ID : process.env.CODEX_THREAD_ID);
+  let session = values.session ?? (values["session-file"] ? undefined : environmentSession(agent));
   let file: string | undefined;
   if (!values.manifest) {
     if (values["session-file"]) file = resolve(values["session-file"]);
+    // Pi exports the exact current transcript to its bash tool. An explicit
+    // --session still names its own transcript, and PI_SESSION_ID must agree.
+    else if (agent === "pi" && values.session === undefined && process.env.PI_SESSION_FILE) file = resolve(process.env.PI_SESSION_FILE);
     else {
       if (!session) throw new Error("session identity is unavailable; pass --session-file or --session explicitly");
-      const root = agent === "claude"
-        ? join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects")
-        : join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "sessions");
-      file = await findTranscript(root, agent, session);
+      file = await findTranscript(transcriptRoot(agent), agent, session);
     }
     const text = await readFile(file, "utf8");
-    const raw = text.split("\n").filter(line => line.trim()).map(line => JSON.parse(line) as Record<string, unknown>);
-    const actualAgent = raw.some(entry => entry.type === "session_meta") ? "codex" : raw.some(entry => typeof entry.sessionId === "string") ? "claude" : "pi";
-    if (actualAgent !== agent) throw new Error("transcript agent does not match --agent");
+    const raw = text.split("\n").filter(line => line.trim()).map((line, index) => ({ value: JSON.parse(line) as unknown, source: { line: index + 1, byteStart: 0, byteEnd: 0 } }));
+    const actualAgent = detectSource(raw);
+    if (actualAgent !== agent) throw new Error(`transcript is a ${actualAgent} session, not --agent ${agent}`);
     const collected = await collectStageFromFile(file);
-    if (session && session !== collected.sessionId) throw new Error("transcript session identity does not match --session");
+    if (session && session !== collected.sessionId) throw new Error("transcript session identity does not match the requested session (--session or the agent environment)");
     session = collected.sessionId;
     if (values.list) {
+      const suspicious = inspectBash(collected.bash).length;
+      if (suspicious) console.error(`${suspicious} successful bash command(s) look file-mutating; ${BASH_NOTE}. Inspect them before selecting or committing scope.`);
       const unsupported = collected.bash.filter(call => call.unsupportedPatch);
       if (unsupported.length) console.error(`Incomplete mutation coverage: ${unsupported.length} exec cell(s) contain unsupported apply_patch syntax. Review these calls before selecting or committing scope.`);
       let patches = collected.patches;
@@ -87,7 +112,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
   } else {
     const action = report.dryRun ? `Dry run: ${report.staged.length} file(s) would be staged` : report.staged.length ? `Staged ${report.staged.length} file(s)` : "No new changes staged";
-    console.error(`${action}. ${report.unchanged.length} unchanged.${report.excluded.length ? ` ${report.excluded.length} outside paths skipped.` : ""}${report.selection?.omitted?.length ? ` Review ${report.selection.omitted.length} intentionally omitted file mutation(s).` : ""}${report.unattributedBashCount ? ` Inspect ${report.unattributedBashCount} possible bash mutation(s) before committing.` : ""}`);
+    console.error(`${action}. ${report.unchanged.length} unchanged.${report.excluded.length ? ` ${report.excluded.length} outside paths skipped.` : ""}${report.selection?.omitted?.length ? ` Review ${report.selection.omitted.length} intentionally omitted file mutation(s).` : ""}${report.unattributedBashCount ? ` Inspect ${report.unattributedBashCount} possible bash mutation(s) before committing; ${BASH_NOTE}.` : ""}`);
   }
 }
 

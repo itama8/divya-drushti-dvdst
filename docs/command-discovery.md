@@ -26,7 +26,7 @@ entry includes:
 - `sessionSources`: transcript sources this command can consume. An empty
   array means it is not a transcript reader; live producer namespaces are a
   separate interface. `sessions` is Pi filename discovery, and `session-stage`
-  selects Claude/Codex. Cross-agent analysis does not imply a live adapter.
+  selects Pi/Claude/Codex transcripts. Cross-agent analysis does not imply a live adapter.
 - `effects`: conditional persistent writes or caller-code execution, with
   `kind` and `when`. Empty means no listed material effect, not a sandbox.
 - `hasOutputSchema`: whether a shared field schema is currently available.

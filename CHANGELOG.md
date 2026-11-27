@@ -17,6 +17,16 @@
   recorded `phase` (`commentary`, `final_answer`); `message --help` and
   capabilities name the reader's output keys.
 
+- `session-stage --agent pi` stages a Pi session's successful `edit`/`write`
+  calls from its transcript with `--session-file`, `--list`, `--dry-run`,
+  `--manifest`, and `--after`, through the same exact replay, HEAD pinning, and
+  atomic index transaction. Discovery uses Pi's `PI_SESSION_FILE`, or
+  `PI_SESSION_ID` under `PI_CODING_AGENT_SESSION_DIR`/`PI_CODING_AGENT_DIR`.
+  Staging now mirrors Pi's edit-argument normalization (JSON-string or
+  single-object `edits`, legacy top-level `oldText`/`newText`), so a successful
+  legacy-shaped call no longer aborts a Pi session file. `--list` and the
+  staging summary state that bash edits are never attributed or staged.
+
 - `messages`/`search --full` return complete message text (accurate
   `totalChars`, `truncated: false`); `--text-limit` stays 1–4096, default 240.
   Message rows gain `kind` (`human`, `injected`, `skill-expansion`,
