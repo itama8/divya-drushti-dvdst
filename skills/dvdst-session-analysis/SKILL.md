@@ -83,6 +83,13 @@ dvdst search /path/to/session.jsonl --query 'parser failed' --in results --limit
 
 `messages` and `search` accept analysis session selection, `--fields`,
 `--offset`, JSONL/JSON/TSV, and default to 20 rows with 240-character text slices.
+`--text-limit` accepts 1–4096; use `--full` for complete text in one run rather
+than one `message --ref` call per long reply. Rows carry `kind` (`human`,
+`injected`, `skill-expansion`, `notification`, `agent`, `tool`, `unknown`);
+search hits carry `messageKind`. Use `--kind human` when counting what the user
+said: AGENTS.md blocks, system reminders, skill expansions and notifications
+are separated. `human` is the prompt path without a harness marker, not proof
+of authorship; `unknown` is not `human`.
 Search is literal; add `--ignore-case` as needed. `--in` selects messages,
 commands, results, or all. Explicit roles filter every target. `--page` returns
 JSON counts, `nextOffset`, and failed-source metadata; partial queries still
