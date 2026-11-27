@@ -60,7 +60,9 @@ session inside Pi. `latest`, `--last`, and `--since` select Pi sessions unless
 you pass `--source claude`, `--source codex`, or `--source all`. `DVDST_SOURCE`
 sets that default. Verify `overview.path`, `session`, and `firstPrompt` before
 using a discovered transcript: `latest` can refer to another concurrent agent,
-and discovery can fall back to other projects when the current cwd has none.
+and discovery falls back to every project when the current cwd has none. It
+then prints `dvdst: no ... sessions recorded for the working directory ...` on
+stderr: treat that as a wrong-scope warning and add `--project` or a path.
 Prefer an exact path for a particular session. `--project <name>` constrains
 project discovery; `--root <dir>` selects a flat transcript directory.
 
@@ -90,12 +92,21 @@ search hits carry `messageKind`. Use `--kind human` when counting what the user
 said: AGENTS.md blocks, system reminders, skill expansions and notifications
 are separated. `human` is the prompt path without a harness marker, not proof
 of authorship; `unknown` is not `human`.
+Assistant messages holding only thinking or tool calls are rows with
+`text.totalChars: 0`; add `--nonempty` to `messages` to skip them. `seq` keeps
+addressing the full conversation, so expect gaps.
 Search is literal; add `--ignore-case` as needed. `--in` selects messages,
-commands, results, or all. Explicit roles filter every target. `--page` returns
-JSON counts, `nextOffset`, and failed-source metadata; partial queries still
-exit nonzero. Row offsets are not snapshot cursors.
+commands, results, or all. Explicit roles filter every target.
+Know the shape you asked for: JSONL rows by default, a bare JSON array with
+`--format json`, and with `--page` one envelope object
+`{schemaVersion, rows, matched, offset, returned, nextOffset, complete, selectedSources, readSources, failedSources}`.
+Partial queries still exit nonzero. Row offsets are not snapshot cursors; an
+`--offset` past the matching rows returns no data and a stderr notice.
 
-`message` returns the anchor and two neighbors per side by default (all roles,
+`message` returns one object
+`{schemaVersion, source, session, path, fingerprint, anchorSeq, messages, beforeRef, afterRef}`;
+the anchor is the `messages` row whose `seq` equals `anchorSeq` (there is no
+top-level `text`). It holds the anchor and two neighbors per side by default (all roles,
 including tools), with 2000 characters per message. Continue the anchor with
 `--text-offset`, or use `beforeRef`/`afterRef` for more neighbors. `--limit` on
 this reader bounds characters per message. Tool links lead to `call`;
@@ -109,7 +120,7 @@ go through one filter.
 
 ```bash
 # the most expensive sessions
-dvdst overview --last 50 | jq -s 'sort_by(-.cost)[:5][] | {session, cost, turns, calls, firstPrompt}'
+dvdst overview --last 50 | jq -s 'sort_by(-.cost)[:5][] | {session, cost, costBasis, turns, calls, firstPrompt}'
 
 # what failed in one session
 dvdst calls latest --errors | jq -c '{seq, tool, exitCode, durationMs, command, path}'
@@ -215,11 +226,13 @@ has two complete extractors in `examples/extractors/`.
   `opaque` lists the reasons a call may change files it does not name. Say so
   when a claim rests on them.
 - `durationMs` of Pi calls made in one message is an upper bound.
-- A Claude Code session has no cost, no request start time, and no system
+- A Claude Code session has no per-request cost (overview.cost is its own
+  recorded session total, `costBasis: session`, when present), no request start time, and no system
   prompt. Those fields are null. Do not report null as zero.
 - Codex turns are recorded assistant items, not guaranteed provider request
-  counts. Usage is attached once where recorded; cost and request start times
-  remain null. Analysis covers the supplied rollout segment. Complex exec
+  counts. Usage is attached once where recorded; Codex records no cost, so cost
+  and request start times remain null and cross-agent cost comparison cannot
+  include Codex. Analysis covers the supplied rollout segment. Complex exec
   scripts remain opaque; supported literal batches expose their nested tools.
 - An incomplete line in a growing transcript may make that file fail. Analysis
   can emit rows for other sessions and still exit nonzero; inspect stderr and
@@ -227,8 +240,12 @@ has two complete extractors in `examples/extractors/`.
 - Cite the `session` and `line` of the rows behind a finding, so a reader can
   check it against the session file.
 - Search on merged Claude text cites the matched block; its message's first
-  line may be earlier. Codex `channel` distinguishes analysis from final or
-  commentary replies. Thinking/reasoning blocks and binary content are not
+  line may be earlier. Codex `channel` (the recorded channel, or the `phase`
+  `commentary`/`final_answer` in newer rollouts) distinguishes commentary from
+  final replies; it is null for Pi and Claude Code.
+- Tool names differ by agent: Codex keeps `exec`, `write_stdin`, `wait`.
+  Filter across agents with `calls --family shell|poll|read|edit|write|search|web|other`
+  (`overview.families` counts them) and keep `tool` for the raw name. Thinking/reasoning blocks and binary content are not
   substituted for conversation text. Recorded statements alone do not prove
   implementation or acceptance.
 - Handoff `validation` distinguishes unfinished tests, exact-argument retries,

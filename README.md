@@ -122,11 +122,17 @@ come from the Pi extension:
 | Stored session pipeline: `ingest`, `normalize`, `artifacts`, `events` | Supported | Supported | Supported |
 | Bundled live recorder and settled review frames | Pi extension | No bundled adapter | No bundled adapter |
 
-Claude Code does not record every Pi field. Cost and model generation timing
-remain null where absent, and its `context` stream has no system prompt rows.
+Claude Code does not record every Pi field. Per-request cost and model
+generation timing remain null; `overview.cost` is Claude Code's own recorded
+session total (`costBasis: session`) when its transcript has one, while Pi sums
+per-request cost (`costBasis: requests`). Its `context` stream has no system
+prompt rows.
 Codex also supports analysis, inspection, handoffs, and stored findings. Its
 `turns` represent recorded assistant response items; recorded request usage is
-attached once, with cost and request start times left null. Analysis reads the
+attached once, with cost and request start times left null: Codex records no
+cost, so cross-agent cost comparison is not possible for Codex sessions.
+`calls.family` groups agent-specific tool names (Codex `write_stdin`/`wait`
+are `poll`) so `calls --family` filters carry across agents. Analysis reads the
 supplied rollout segment; verified pagination joining remains staging-only.
 
 ## For agents: queries and skills

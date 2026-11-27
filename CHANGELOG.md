@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Fixes from a fresh agent's usability test: `messages --nonempty` skips
+  thinking- and tool-call-only messages without renumbering `seq`; help,
+  option, schema, and capability text state that `--format json` is a bare
+  row array while `--page` is an envelope (now also reporting `offset`); an
+  `--offset` at or past the matched rows prints a stderr notice outside
+  `--page` (messages, search, inspection, and analysis streams); discovery
+  that falls back from the working directory to every project prints a stderr
+  notice (`resolveSessions` `onNotice`, default stderr); `calls.family`,
+  `overview.families`, and `calls --family` give a cross-agent tool view while
+  `tool` keeps raw names; Claude Code `overview.cost` uses its recorded
+  `cost-state` session total (`costBasis: session`; unknown-model estimates
+  stay null), Codex records no cost; Codex `channel` falls back to the
+  recorded `phase` (`commentary`, `final_answer`); `message --help` and
+  capabilities name the reader's output keys.
+
 - `messages`/`search --full` return complete message text (accurate
   `totalChars`, `truncated: false`); `--text-limit` stays 1–4096, default 240.
   Message rows gain `kind` (`human`, `injected`, `skill-expansion`,
