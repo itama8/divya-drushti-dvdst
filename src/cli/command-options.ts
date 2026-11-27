@@ -64,7 +64,7 @@ export const CLI_OPTIONS = {
   call: { id: s("Exact call ID; use seq if ambiguous."), seq, ref,
     limit: { ...textLimit, effectiveDefault: 4096 }, "args-offset": textOffset, "result-offset": textOffset, "command-offset": textOffset, help },
   conversation: {
-    ...selection, role, query: s("Nonempty literal search string, not a user regex.", { minLength: 1 }),
+    ...selection, role, kind: s("Comma-separated message kinds to keep: human,injected,skill-expansion,notification,agent,tool,unknown. Search filters by the enclosing message's kind; combines with --role.", { defaultDescription: "All kinds." }), query: s("Nonempty literal search string, not a user regex.", { minLength: 1 }),
     in: s("Search target.", { choices: ["messages", "commands", "results", "all"], effectiveDefault: "messages" }),
     "ignore-case": b("Use Unicode simple case folding for literal search."), ...rows,
     "text-limit": s("Characters per returned prefix/excerpt; mutually exclusive with --full.", { valueType: "integer", minimum: 1, maximum: 4096, effectiveDefault: 240 }),
@@ -116,8 +116,8 @@ export const CLI_OPTIONS = {
 
 export const CONVERSATION_ALLOWED = {
   message: ["ref", "seq", "before", "after", "limit", "text-offset", "format", "help"],
-  messages: ["source", "project", "root", "last", "since", "role", "limit", "offset", "text-limit", "full", "fields", "format", "page", "help"],
-  search: ["source", "project", "root", "last", "since", "role", "limit", "offset", "text-limit", "full", "fields", "format", "page", "query", "in", "ignore-case", "help"],
+  messages: ["source", "project", "root", "last", "since", "role", "kind", "limit", "offset", "text-limit", "full", "fields", "format", "page", "help"],
+  search: ["source", "project", "root", "last", "since", "role", "kind", "limit", "offset", "text-limit", "full", "fields", "format", "page", "query", "in", "ignore-case", "help"],
 } as const;
 
 export function pickOptions(options: Record<string, CatalogOption>, names: readonly string[]): Record<string, CatalogOption> {
