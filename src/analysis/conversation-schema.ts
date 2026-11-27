@@ -5,7 +5,7 @@ const identity = [field("session", "string", "Recorded session ID; multiple segm
 const text = "TextSlice: {text, offset, totalChars, nextOffset, truncated}. Unicode code-point offsets; source conversion joins visible text blocks with newlines.";
 
 export const MESSAGES_SCHEMA: StreamSpec = {
-  description: "One canonical message with bounded visible text and exact snapshot reference. Default roles: user,assistant; default 20 rows and 240 characters per row.",
+  description: "One canonical message with bounded visible text and exact snapshot reference. Default roles: user,assistant; default 20 rows and 240 characters per row; --full returns complete text.",
   fields: [
     ...identity,
     field("seq", "number", "1-based message position in the unfiltered canonical conversation, including tool-only messages."),
@@ -28,7 +28,7 @@ export const MESSAGES_SCHEMA: StreamSpec = {
 };
 
 export const SEARCH_SCHEMA: StreamSpec = {
-  description: "First literal match per selected message/command/result. Default: user/assistant messages, 20 hits, 240-character excerpts. --ignore-case uses Unicode simple folding; no user regex is executed.",
+  description: "First literal match per selected message/command/result. Default: user/assistant messages, 20 hits, 240-character excerpts (--full: the whole matched text). --ignore-case uses Unicode simple folding; no user regex is executed.",
   fields: [
     ...identity,
     field("kind", "string", "message, command, or result."),

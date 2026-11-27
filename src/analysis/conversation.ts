@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { isObject, type SourceReference } from "../pi/read-jsonl.js";
 import { decodeMessageReference, encodeMessageReference } from "./message-reference.js";
 import { decodeCallReference } from "./call-reference.js";
-import { integerOption, sliceText, type TextSlice } from "./read-call.js";
+import { integerOption, sliceText, wholeText, type TextSlice } from "./read-call.js";
 import { loadSession, loadSessionFile, type SessionData } from "./session.js";
 import type { Row } from "./rows.js";
 
@@ -121,6 +121,8 @@ export interface ConversationQueryOptions {
   offset?: number;
   limit?: number;
   textLimit?: number;
+  /** Return complete text instead of a --text-limit prefix/excerpt. */
+  full?: boolean;
 }
 export interface EvidencePage<T> { rows: T[]; matched: number; nextOffset: number | null }
 
@@ -130,6 +132,7 @@ function queryOptions(options: ConversationQueryOptions) {
     offset: integerOption(options.offset ?? 0, "--offset", 0)!,
     limit: integerOption(options.limit ?? 20, "--limit", 1)!,
     textLimit: integerOption(options.textLimit ?? 240, "--text-limit", 1, 4096)!,
+    full: options.full === true,
   };
 }
 
@@ -138,9 +141,9 @@ function roleMatches(role: string, roles: RoleSelection | undefined, defaults: r
 }
 
 export function listMessages(conversation: Conversation, options: ConversationQueryOptions = {}): EvidencePage<MessageRow> {
-  const { offset, limit, textLimit } = queryOptions(options);
+  const { offset, limit, textLimit, full } = queryOptions(options);
   const matching = conversation.messages.filter(message => roleMatches(message.metadata.role, options.roles, ["user", "assistant"]));
-  const rows = matching.slice(offset, offset + limit).map(message => ({ ...message.metadata, text: sliceText(message.text, 0, textLimit) }));
+  const rows = matching.slice(offset, offset + limit).map(message => ({ ...message.metadata, text: full ? wholeText(message.text) : sliceText(message.text, 0, textLimit) }));
   return { rows, matched: matching.length, nextOffset: offset + rows.length < matching.length ? offset + rows.length : null };
 }
 
@@ -170,7 +173,7 @@ export interface SearchHit {
 
 /** One hit per message/command/result, at its first literal match. */
 export function searchConversation(conversation: Conversation, options: SearchOptions): EvidencePage<SearchHit> {
-  const { offset, limit, textLimit } = queryOptions(options);
+  const { offset, limit, textLimit, full } = queryOptions(options);
   if (options.query.length === 0) throw new Error("--query must not be empty.");
   const scope = options.scope ?? "messages";
   if (!["messages", "commands", "results", "all"].includes(scope)) throw new Error("--in must be messages, commands, results, or all.");
@@ -192,7 +195,7 @@ export function searchConversation(conversation: Conversation, options: SearchOp
     rows.push({ session: conversation.session.session, source: conversation.session.source, path: resolve(conversation.session.path),
       kind, role: message.metadata.role, channel: message.metadata.channel, line: provenance[0]?.line ?? message.metadata.line, sources: provenance,
       messageSeq: message.metadata.seq, messageRef: message.metadata.ref, callId, ref, refKind: ref.startsWith("dvdst-call:") ? "call" : "message",
-      match: { offset: start, chars }, excerpt: sliceText(text, Math.max(0, start - Math.floor(textLimit / 4)), textLimit),
+      match: { offset: start, chars }, excerpt: full ? wholeText(text) : sliceText(text, Math.max(0, start - Math.floor(textLimit / 4)), textLimit),
     });
   };
   for (const message of conversation.messages) {

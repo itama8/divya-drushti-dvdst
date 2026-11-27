@@ -32,6 +32,11 @@ export function sliceText(text: string, offset = 0, limit = 4096): TextSlice {
   return { text: chars.slice(offset, end).join(""), offset, totalChars: chars.length, nextOffset: end < chars.length ? end : null, truncated: offset > 0 || end < chars.length };
 }
 
+/** The complete text as an untruncated slice; callers opt in explicitly (for example --full). */
+export function wholeText(text: string): TextSlice {
+  return { text, offset: 0, totalChars: Array.from(text).length, nextOffset: null, truncated: false };
+}
+
 export function integerOption(value: string | number | undefined, name: string, minimum: number, maximum = Number.MAX_SAFE_INTEGER): number | undefined {
   if (value === undefined) return undefined;
   const n = typeof value === "string" && !/^\d+$/.test(value) ? NaN : Number(value);

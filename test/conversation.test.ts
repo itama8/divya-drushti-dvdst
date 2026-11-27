@@ -50,6 +50,27 @@ describe("conversation exploration", () => {
     for (const row of all.rows) assert.deepEqual(Object.keys(row).sort(), MESSAGES_SCHEMA.fields.map(field => field.name).sort());
   }));
 
+  it("returns complete text with --full, beyond the 4096 prefix bound and the 65536 reader limit", async () => temporary(async file => {
+    const long = `Plan:\n${"😀 finding ".repeat(8000)}\nEnd of review.`;
+    await writeFile(file, jsonl([...piRecords, msg("u3", "user", text("review it")), msg("a4", "assistant", text(long))]));
+    const conversation = await loadConversation(file);
+    const bounded = listMessages(conversation, { offset: 3, textLimit: 4096 }).rows.find(row => row.id === "a4")!;
+    assert.equal(bounded.text.truncated, true);
+    assert.equal(bounded.text.totalChars, Array.from(long).length);
+    const whole = listMessages(conversation, { offset: 3, full: true }).rows.find(row => row.id === "a4")!;
+    assert.equal(whole.text.text, long);
+    assert.deepEqual([whole.text.offset, whole.text.totalChars, whole.text.nextOffset, whole.text.truncated], [0, Array.from(long).length, null, false]);
+    assert.ok(whole.text.totalChars > 65536);
+    const hit = searchConversation(conversation, { query: "End of review", full: true }).rows[0]!;
+    assert.equal(hit.excerpt.text, long);
+    assert.equal(hit.match.offset, Array.from(long).length - "End of review.".length);
+    const cliRows = cli("messages", file, "--full", "--offset", "3", "--fields", "id,text").stdout.trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(cliRows.find(row => row.id === "a4").text.text, long);
+    const rejected = cli("messages", file, "--full", "--text-limit", "10");
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /--full or --text-limit/);
+  }));
+
   it("finds a late correction and expands its actual neighbors", async () => temporary(async file => {
     const hits = searchConversation(await loadConversation(file), { query: "Correction", roles: ["user"], textLimit: 20 });
     assert.equal(hits.matched, 1);
