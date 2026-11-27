@@ -50,6 +50,27 @@ describe("conversation exploration", () => {
     for (const row of all.rows) assert.deepEqual(Object.keys(row).sort(), MESSAGES_SCHEMA.fields.map(field => field.name).sort());
   }));
 
+  it("returns complete text with --full, beyond the 4096 prefix bound and the 65536 reader limit", async () => temporary(async file => {
+    const long = `Plan:\n${"😀 finding ".repeat(8000)}\nEnd of review.`;
+    await writeFile(file, jsonl([...piRecords, msg("u3", "user", text("review it")), msg("a4", "assistant", text(long))]));
+    const conversation = await loadConversation(file);
+    const bounded = listMessages(conversation, { offset: 3, textLimit: 4096 }).rows.find(row => row.id === "a4")!;
+    assert.equal(bounded.text.truncated, true);
+    assert.equal(bounded.text.totalChars, Array.from(long).length);
+    const whole = listMessages(conversation, { offset: 3, full: true }).rows.find(row => row.id === "a4")!;
+    assert.equal(whole.text.text, long);
+    assert.deepEqual([whole.text.offset, whole.text.totalChars, whole.text.nextOffset, whole.text.truncated], [0, Array.from(long).length, null, false]);
+    assert.ok(whole.text.totalChars > 65536);
+    const hit = searchConversation(conversation, { query: "End of review", full: true }).rows[0]!;
+    assert.equal(hit.excerpt.text, long);
+    assert.equal(hit.match.offset, Array.from(long).length - "End of review.".length);
+    const cliRows = cli("messages", file, "--full", "--offset", "3", "--fields", "id,text").stdout.trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(cliRows.find(row => row.id === "a4").text.text, long);
+    const rejected = cli("messages", file, "--full", "--text-limit", "10");
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /--full or --text-limit/);
+  }));
+
   it("finds a late correction and expands its actual neighbors", async () => temporary(async file => {
     const hits = searchConversation(await loadConversation(file), { query: "Correction", roles: ["user"], textLimit: 20 });
     assert.equal(hits.matched, 1);
@@ -179,6 +200,91 @@ describe("conversation source conversion", () => {
   }));
 });
 
+const agentsBlock = "# AGENTS.md instructions for /work/project\n\n<INSTRUCTIONS>\n# Project rules\n\n- Run `npm test` before committing.\n- Never commit fixtures copied from real sessions.\n</INSTRUCTIONS>";
+const skillBlock = "<skill name=\"release-notes\" location=\"/work/project/.agents/skills/release-notes/SKILL.md\">\n---\nname: release-notes\n---\nSummarize merged changes by area.\n</skill>\n\nWrite notes for v2";
+const longReply = (label: string) => `${label} findings:\n${Array.from({ length: 600 }, (_, i) => `- item ${i}: the parser keeps the original bytes`).join("\n")}\nEnd of ${label} review.`;
+const kindsOf = (conversation: Awaited<ReturnType<typeof loadConversation>>) =>
+  listMessages(conversation, { roles: "all", limit: 100 }).rows.map(row => [row.role, row.kind]);
+
+describe("message kinds and full text by source", () => {
+  it("classifies Pi system, skill-expansion and typed prompts and returns a long reply whole", async () => temporary(async file => {
+    const reply = longReply("Pi");
+    await writeFile(file, jsonl([
+      { type: "session", id: "pi-kinds", cwd: "/work/project" },
+      msg("s", "system", [], { sections: { rules: "System policy" } }),
+      msg("u1", "user", text(skillBlock)),
+      msg("a1", "assistant", text("Drafting")),
+      msg("u2", "user", text("the release notes miss the parser fix")),
+      msg("a2", "assistant", [...text(reply), { type: "toolCall", id: "t", name: "bash", arguments: { command: "git log" } }]),
+      msg("r", "toolResult", text("abc123 parser fix"), { toolCallId: "t" }),
+    ]));
+    const conversation = await loadConversation(file);
+    assert.deepEqual(kindsOf(conversation), [["system", "injected"], ["user", "skill-expansion"], ["assistant", "agent"], ["user", "human"], ["assistant", "agent"], ["toolResult", "tool"]]);
+    assert.deepEqual(listMessages(conversation, { kinds: ["human"] }).rows.map(row => row.id), ["u2"]);
+    const whole = listMessages(conversation, { kinds: ["agent"], full: true }).rows.find(row => row.id === "a2")!;
+    assert.equal(whole.text.text, reply);
+    assert.equal(whole.text.truncated, false);
+    assert.ok(whole.text.totalChars > 4096);
+    const hit = searchConversation(conversation, { query: "release", kinds: ["skill-expansion"] }).rows[0]!;
+    assert.equal(hit.messageKind, "skill-expansion");
+    assert.equal(searchConversation(conversation, { query: "release", kinds: ["human"] }).matched, 1, "only the typed prompt");
+    assert.equal(searchConversation(conversation, { query: "git log", scope: "commands" }).rows[0]!.messageKind, "agent");
+  }));
+
+  it("classifies Claude Code prompts from structure, keeps meta entries out, and merges a long reply whole", async () => temporary(async file => {
+    const header = { sessionId: "claude-kinds", cwd: "/work/project" };
+    const reply = longReply("Claude");
+    const half = Math.floor(reply.length / 2);
+    await writeFile(file, jsonl([
+      { ...header, type: "user", uuid: "u1", promptId: "p1", message: { content: "why did the parser test break?" } },
+      { ...header, type: "user", uuid: "m1", isMeta: true, message: { content: [{ type: "text", text: "Base directory for this skill: /work/project/.claude/skills/review\n\nReview carefully." }] } },
+      { ...header, type: "user", uuid: "n1", origin: { kind: "task-notification" }, message: { content: "<task-notification>\n<status>completed</status>\n</task-notification>" } },
+      { ...header, type: "assistant", message: { id: "a", content: [{ type: "text", text: reply.slice(0, half) }] } },
+      { ...header, type: "assistant", message: { id: "a", content: [{ type: "tool_use", id: "t", name: "Bash", input: { command: "npm test" } }] } },
+      { ...header, type: "assistant", message: { id: "a", content: [{ type: "text", text: reply.slice(half) }] } },
+      { ...header, type: "user", uuid: "r", message: { content: [{ type: "tool_result", tool_use_id: "t", content: "1 failing" }] } },
+      { ...header, type: "user", uuid: "u2", promptId: "p2", message: { content: "Context handoff (full_thread_summary):\nPrevious thread summary goes here." } },
+    ]));
+    const conversation = await loadConversation(file);
+    assert.deepEqual(kindsOf(conversation), [["user", "human"], ["assistant", "agent"], ["toolResult", "tool"], ["user", "injected"]]);
+    const whole = listMessages(conversation, { kinds: ["agent"], full: true }).rows[0]!;
+    assert.equal(whole.text.text, `${reply.slice(0, half)}\n${reply.slice(half)}`, "merged text blocks join with a newline");
+    assert.equal(whole.text.totalChars, Array.from(reply).length + 1);
+  }));
+
+  it("classifies Codex AGENTS.md, replayed and developer items as injected and echoed inputs as submitted", async () => temporary(async file => {
+    const reply = longReply("Codex");
+    const user = (value: string) => ({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: value }] } });
+    const echo = (value: string) => ({ type: "event_msg", payload: { type: "item_completed", item: { type: "UserMessage", id: value.length, content: [{ type: "text", text: value, text_elements: [] }] } } });
+    await writeFile(file, jsonl([
+      { type: "session_meta", payload: { id: "codex-kinds", cwd: "/work/project" } },
+      { type: "response_item", payload: { type: "message", role: "developer", content: [{ type: "input_text", text: "<permissions instructions>sandboxed</permissions instructions>" }] } },
+      user(agentsBlock),
+      user("<environment_context>\n  <cwd>/work/project</cwd>\n</environment_context>"),
+      user("review the parser change"), echo("review the parser change"),
+      { type: "response_item", payload: { type: "message", role: "assistant", channel: "final", content: [{ type: "output_text", text: reply }] } },
+      user("Background command completed (exit 0): npm test"), echo("Background command completed (exit 0): npm test"),
+      user("[Historical user; user_message; thread=t1]\nreview the parser change"),
+    ]));
+    const conversation = await loadConversation(file);
+    assert.deepEqual(kindsOf(conversation), [["developer", "injected"], ["user", "injected"], ["user", "human"], ["assistant", "agent"], ["user", "notification"], ["user", "injected"]]);
+    assert.deepEqual(listMessages(conversation, { kinds: ["human"], full: true }).rows.map(row => row.text.text), ["review the parser change"]);
+    assert.equal(listMessages(conversation, { kinds: ["agent"], full: true }).rows[0]!.text.text, reply);
+    const agents = searchConversation(conversation, { query: "AGENTS.md" }).rows[0]!;
+    assert.equal(agents.messageKind, "injected");
+  }));
+
+  it("reports unknown, not human, for Codex inputs when the file records no input echoes", async () => temporary(async file => {
+    await writeFile(file, jsonl([
+      { type: "session_meta", payload: { id: "codex-legacy", cwd: "/work/project" } },
+      { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: agentsBlock }] } },
+      { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "fix the flaky test" }] } },
+      { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: skillBlock }] } },
+    ]));
+    assert.deepEqual(kindsOf(await loadConversation(file)), [["user", "injected"], ["user", "unknown"], ["user", "skill-expansion"]]);
+  }));
+});
+
 describe("conversation CLI", () => {
   it("runs discovery-compatible search, projection, pagination and neighborhood expansion", async () => temporary(async (file, root) => {
     const first = cli("search", "--root", root, "--source", "all", "--query", "local", "--limit", "1", "--text-limit", "18", "--page");
@@ -197,6 +303,8 @@ describe("conversation CLI", () => {
     assert.deepEqual(JSON.parse(listing.stdout), [{ seq: 2, role: "user" }, { seq: 5, role: "user" }]);
     assert.equal(cli("messages", file, "--limit", "1", "--fields", "role").stdout, '{"role":"user"}\n');
     assert.equal(cli("search", file, "--query", "CORRECTION", "--ignore-case", "--fields", "line").stdout, '{"line":6}\n');
+    assert.deepEqual(JSON.parse(cli("messages", file, "--kind", "human", "--fields", "seq,kind", "--format", "json").stdout), [{ seq: 2, kind: "human" }, { seq: 5, kind: "human" }]);
+    assert.equal(cli("search", file, "--query", "local", "--kind", "agent", "--fields", "messageKind,line", "--format", "tsv").stdout, "messageKind\tline\nagent\t7\n");
   }));
 
   it("paginates across files and exposes partial failures beyond the returned page", async () => temporary(async (file, root) => {
@@ -223,7 +331,8 @@ describe("conversation CLI", () => {
       ["search", file], ["search", file, "--query", ""], ["search", file, "--query", "x", "--in", "typo"],
       ["messages", file, "--role", "typo"], ["messages", file, "--role", "user,user"], ["messages", file, "--offset", "-1"],
       ["messages", file, "--limit", "0"], ["messages", file, "--text-limit", "5000"], ["messages", file, "--fields", "typo"],
-      ["messages", file, "--query", "x"], ["messages", file, "--page", "--format", "jsonl"],
+      ["messages", file, "--query", "x"], ["messages", file, "--kind", "typo"], ["messages", file, "--kind", "human,human"],
+      ["message", file, "--seq", "2", "--kind", "human"], ["messages", file, "--page", "--format", "jsonl"],
       ["message", file, "--seq", "2", "--role", "user"], ["message", file, "--seq", "2", "--format", "text"],
     ]) { const response = cli(...args); assert.equal(response.status, 1, args.join(" ")); assert.equal(response.stdout, ""); }
     const empty = JSON.parse(cli("search", file, "--query", "absent", "--page").stdout);

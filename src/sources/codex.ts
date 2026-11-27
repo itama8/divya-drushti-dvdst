@@ -57,9 +57,32 @@ function expandLiteralExec(records: SourceRecord[]): SourceRecord[] {
   });
 }
 
+const normalized = (value: string) => value.replace(/\s+/g, " ").trim();
+
+/**
+ * Codex echoes each submitted user input as an event (legacy
+ * `event_msg/user_message`, or `event_msg/item_completed` with a `UserMessage`
+ * item). Harness-built user-role items (AGENTS.md, environment context,
+ * compaction replays) have no echo. Returns undefined when the file carries no
+ * echoes at all, because absence then says nothing.
+ */
+function submittedInputs(records: SourceRecord[]): Set<string> | undefined {
+  const inputs = new Set<string>();
+  let echoes = 0;
+  for (const record of records) {
+    const entry = record.value;
+    if (!isObject(entry) || entry.type !== "event_msg" || !isObject(entry.payload)) continue;
+    const p = entry.payload;
+    if (p.type === "user_message" && typeof p.message === "string") { echoes += 1; inputs.add(normalized(p.message)); }
+    if (p.type === "item_completed" && isObject(p.item) && p.item.type === "UserMessage") { echoes += 1; inputs.add(normalized(text(p.item.content))); }
+  }
+  return echoes === 0 ? undefined : inputs;
+}
+
 /** Convert only recorded response items; event_msg echoes must never double count them. */
 export function codexToCanonical(records: SourceRecord[]): SourceRecord[] {
   const output: SourceRecord[] = [];
+  const submitted = submittedInputs(records);
   const calls = new Map<string, string>();
   const shellSessions = new Map<string, string>();
   const pollSessions = new Map<string, string>();
@@ -101,7 +124,11 @@ export function codexToCanonical(records: SourceRecord[]): SourceRecord[] {
     } else if (entry.type === "response_item") {
       if (p.type === "message" && (p.role === "user" || p.role === "assistant" || p.role === "developer")) {
         if (p.role === "user" && /^\s*<(?:environment_context|permissions instructions)>/.test(text(p.content))) continue;
-        const message = { role: p.role, model, provider, thinkingLevel: effort, ...(typeof p.channel === "string" ? { channel: p.channel } : {}), content: [{ type: "text", text: text(p.content) }] };
+        // origin is structural evidence only: "submitted" (echoed input) or "injected" (no echo in a file that echoes inputs).
+        const parts = Array.isArray(p.content) ? p.content.filter(isObject).map(block => typeof block.text === "string" ? normalized(block.text) : "").filter(Boolean) : [];
+        const origin = p.role !== "user" || submitted === undefined ? undefined
+          : submitted.has(normalized(text(p.content))) || parts.some(part => submitted.has(part)) ? "submitted" : "injected";
+        const message = { role: p.role, model, provider, thinkingLevel: effort, ...(typeof p.channel === "string" ? { channel: p.channel } : {}), ...(origin === undefined ? {} : { origin }), content: [{ type: "text", text: text(p.content) }] };
         emit({ type: "message", message });
         if (p.role === "assistant") { lastAssistant = message; usageAssigned = false; }
       } else if ((p.type === "function_call" || p.type === "custom_tool_call") && typeof p.call_id === "string" && typeof p.name === "string") {

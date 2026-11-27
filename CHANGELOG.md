@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `messages`/`search --full` return complete message text (accurate
+  `totalChars`, `truncated: false`); `--text-limit` stays 1–4096, default 240.
+  Message rows gain `kind` (`human`, `injected`, `skill-expansion`,
+  `notification`, `agent`, `tool`, `unknown`) and search hits `messageKind`,
+  classified from Pi/Claude Code/Codex record structure with anchored marker
+  fallback; filter with `--kind`.
+
 - Lead with agent onboarding: runnable checkout setup, cross-agent query recipes,
   source selection and failure handling in `docs/agents.md`, root `AGENTS.md`,
   and the reusable session-analysis skill. Keep human workflows secondary.

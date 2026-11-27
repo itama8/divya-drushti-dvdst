@@ -105,7 +105,8 @@ See [command discovery](command-discovery.md).
 | Expand one call? | `dvdst call "$SESSION" --seq 42 --limit 2000` | Bounded arguments and result excerpts |
 | Find an earlier request or reply? | `dvdst search "$SESSION" --query 'local Open' --page` | Literal text hits with source references |
 | Inspect surrounding conversation? | `dvdst message --ref '<messageRef>'` | Exact message and bounded neighbors |
-| Browse user corrections? | `dvdst messages "$SESSION" --role user --limit 10` | Bounded user-message rows |
+| Browse user corrections? | `dvdst messages "$SESSION" --role user --kind human --limit 10` | Bounded typed user-message rows, without injected blocks |
+| Read long replies whole? | `dvdst messages "$SESSION" --role assistant --full --fields seq,ref,text` | Complete text, `truncated: false` |
 | Where did tokens go? | `dvdst turns "$SESSION"` | Canonical assistant messages with recorded usage |
 | What context was recorded? | `dvdst context "$SESSION"` | Recorded system sections |
 | What should the next agent know? | `dvdst handoff "$SESSION" --format json` | Compact goals, files, commands, tests, commits |
@@ -153,6 +154,13 @@ Offsets on row queries are ordinary pagination, not snapshot cursors.
 
 Use `messages`, `search`, then `message` for conversation exploration. Queries
 default to user/assistant text, 20 rows, and 240 characters per text field.
+`--text-limit` accepts 1–4096; `--full` returns complete text in one run (no
+per-message `message --ref` loop). Rows carry `kind`: `human`, `injected`
+(AGENTS.md, system reminders, Codex environment and replay items, handoff and
+delegation prompts), `skill-expansion`, `notification`, `agent`, `tool`, or
+`unknown`; search hits carry `messageKind`. Filter with `--kind human` before
+counting what a person said. `human` means entered through the prompt path
+without a harness marker, not verified authorship; `unknown` is never `human`.
 `search --in commands|results|all` adds other evidence; matching is literal,
 with optional `--ignore-case`. `message` defaults to two neighbors per side
 and 2000 characters per message, with tool exchanges and call links. It can

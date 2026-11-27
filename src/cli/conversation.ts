@@ -4,17 +4,20 @@ import { parseArgs } from "node:util";
 import { loadConversation, listMessages, readMessage, searchConversation, validateRoles, type RoleSelection, type SearchScope } from "../analysis/conversation.js";
 import { MESSAGES_SCHEMA, SEARCH_SCHEMA } from "../analysis/conversation-schema.js";
 import { integerOption } from "../analysis/read-call.js";
+import { parseKinds } from "../analysis/message-kind.js";
 import { resolveSessions, type SourceSelection } from "../pi/resolve-sessions.js";
 import { guardStdout } from "./stdout.js";
 
 guardStdout();
 
 function help() {
-  console.error("Usage: dvdst messages [session...] [--role user,assistant|all] [--limit rows] [--offset rows] [--text-limit chars]");
-  console.error("       dvdst search [session...] --query <literal> [--in messages|commands|results|all] [--ignore-case] [--role roles]");
+  console.error("Usage: dvdst messages [session...] [--role user,assistant|all] [--kind kinds] [--limit rows] [--offset rows] [--text-limit chars | --full]");
+  console.error("       dvdst search [session...] --query <literal> [--in messages|commands|results|all] [--ignore-case] [--role roles] [--kind kinds]");
   console.error("       Both accept --source pi|claude|codex|all, --project <name>, --root <dir>, --last <n>, --since <date>,");
-  console.error("                   --fields <names>, --limit <rows>, --offset <rows>, --text-limit <chars>, --format jsonl|json|tsv, --page.");
+  console.error("                   --fields <names>, --limit <rows>, --offset <rows>, --text-limit <chars>, --full, --format jsonl|json|tsv, --page.");
   console.error("       --page returns a JSON envelope with matched, nextOffset, complete, and failedSources. Default: 20 rows, 240 chars per excerpt.");
+  console.error("       --kind keeps human,injected,skill-expansion,notification,agent,tool,unknown messages (search: by enclosing message).");
+  console.error("       --full returns complete text (totalChars, truncated: false) instead of a --text-limit prefix (1-4096).");
   console.error("       dvdst message <session> --seq <n> [--before <n>] [--after <n>] [--limit chars] [--text-offset <n>]");
   console.error("       dvdst message --ref <messageRef> [--before <n>] [--after <n>] [--limit chars] [--text-offset <n>]");
   console.error("       message returns JSON. Default: 2 neighbors each side, 2000 chars per message; --text-offset applies to the anchor only.");
@@ -51,8 +54,11 @@ async function main() {
   if (!["messages", "commands", "results", "all"].includes(scope)) throw new Error("--in must be messages, commands, results, or all.");
   const roles: RoleSelection | undefined = values.role === undefined ? undefined : values.role === "all" ? "all" : values.role.split(",");
   validateRoles(roles);
+  const kinds = parseKinds(values.kind);
   const limit = integerOption(values.limit ?? "20", "--limit", 1)!;
   const offset = integerOption(values.offset ?? "0", "--offset", 0)!;
+  const full = values.full ?? false;
+  if (full && values["text-limit"] !== undefined) throw new Error("Use --full or --text-limit, not both.");
   const textLimit = integerOption(values["text-limit"] ?? "240", "--text-limit", 1, 4096)!;
   const format = queryFormat(values.format, values.page ?? false);
   const schema = command === "messages" ? MESSAGES_SCHEMA : SEARCH_SCHEMA;
@@ -67,7 +73,7 @@ async function main() {
   await emitQuery({ paths, fields, format, page: values.page ?? false, offset, limit,
     read: async (path, offset, limit) => {
       const conversation = await loadConversation(path);
-      const options = { offset, limit, textLimit, ...(roles === undefined ? {} : { roles }) };
+      const options = { offset, limit, textLimit, full, ...(roles === undefined ? {} : { roles }), ...(kinds === undefined ? {} : { kinds }) };
       return command === "messages" ? listMessages(conversation, options)
         : searchConversation(conversation, { ...options, query: values.query!, scope: scope as SearchScope, ignoreCase: values["ignore-case"] ?? false });
     },

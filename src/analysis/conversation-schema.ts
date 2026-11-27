@@ -2,15 +2,17 @@ import type { FieldSpec, StreamSpec } from "./rows.js";
 
 const field = (name: string, type: string, description: string): FieldSpec => ({ name, type, description });
 const identity = [field("session", "string", "Recorded session ID; multiple segment files may share it."), field("source", "string", "pi, claude, or codex."), field("path", "string", "Absolute segment path.")];
+const KIND = "human, injected, skill-expansion, notification, agent, tool, or unknown. User role: structure first (Pi message entries, surviving Claude Code prompts, Codex inputs with a submitted echo; Codex user items without one are injected), anchored text markers refine or decide when structure is silent. human means entered through the prompt path without a harness marker, not verified authorship; unknown is never guessed as human. assistant is agent, toolResult is tool, system/developer are injected.";
 const text = "TextSlice: {text, offset, totalChars, nextOffset, truncated}. Unicode code-point offsets; source conversion joins visible text blocks with newlines.";
 
 export const MESSAGES_SCHEMA: StreamSpec = {
-  description: "One canonical message with bounded visible text and exact snapshot reference. Default roles: user,assistant; default 20 rows and 240 characters per row.",
+  description: "One canonical message with bounded visible text and exact snapshot reference. Default roles: user,assistant; default 20 rows and 240 characters per row; --full returns complete text.",
   fields: [
     ...identity,
     field("seq", "number", "1-based message position in the unfiltered canonical conversation, including tool-only messages."),
     field("id", "string|null", "Canonical record ID, where recorded or generated during conversion."),
     field("role", "string", "Recorded role, typically user, assistant, toolResult, system, or developer."),
+    field("kind", "string", KIND),
     field("channel", "string|null", "Recorded message channel, such as Codex analysis, commentary, or final. Null when absent; do not treat analysis as a user-facing reply."),
     field("line", "number", "First source line of the canonical message. A merged Claude message may span several records."),
     field("byteStart", "number", "Start of the first source entry in raw bytes."),
@@ -28,11 +30,12 @@ export const MESSAGES_SCHEMA: StreamSpec = {
 };
 
 export const SEARCH_SCHEMA: StreamSpec = {
-  description: "First literal match per selected message/command/result. Default: user/assistant messages, 20 hits, 240-character excerpts. --ignore-case uses Unicode simple folding; no user regex is executed.",
+  description: "First literal match per selected message/command/result. Default: user/assistant messages, 20 hits, 240-character excerpts (--full: the whole matched text). --ignore-case uses Unicode simple folding; no user regex is executed.",
   fields: [
     ...identity,
     field("kind", "string", "message, command, or result."),
     field("role", "string", "Role of the source message: commands are assistant; results are toolResult."),
+    field("messageKind", "string", `kind of the enclosing message (messages schema): ${KIND}`),
     field("channel", "string|null", "Recorded message channel, where available."),
     field("line", "number", "Source line of the first matched text/call block, which may be later than its canonical message's first line."),
     field("sources", "object[]", "Raw source entry ranges intersecting the match. Multiple entries can support a cross-block match."),

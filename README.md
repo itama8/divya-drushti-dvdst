@@ -178,7 +178,9 @@ dvdst messages /path/to/session.jsonl --role user,assistant --limit 10
 ```
 
 `search` can also target commands or tool results with `--in commands` or
-`--in results`. Message windows link to exact calls. See
+`--in results`. Add `--full` for complete message text instead of 240-character
+prefixes, and `--kind human` to separate typed prompts from injected
+instructions, skill expansions, and notifications. Message windows link to exact calls. See
 [conversation exploration](docs/conversation-exploration.md) for neighborhoods,
 source locations, and pagination/completeness metadata.
 

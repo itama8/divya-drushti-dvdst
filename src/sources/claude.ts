@@ -159,7 +159,8 @@ export function claudeToCanonical(records: SourceRecord[]): SourceRecord[] {
     // Slash-command echoes, task notifications, interrupt markers, and injected context are not prompts.
     if (entry.isMeta === true || entry.isCompactSummary === true || prompt.length === 0 || META_PROMPT.test(prompt)) continue;
     output.push({
-      value: { type: "message", id, parentId: entry.parentUuid ?? null, timestamp, message: { role: "user", content: [{ type: "text", text: prompt }] } },
+      // Meta, compact-summary and wrapper entries were excluded above, so what remains entered through the prompt path.
+      value: { type: "message", id, parentId: entry.parentUuid ?? null, timestamp, message: { role: "user", origin: "submitted", content: [{ type: "text", text: prompt }] } },
       source: { ...record.source, entryId: id },
     });
   }

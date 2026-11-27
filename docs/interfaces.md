@@ -42,7 +42,10 @@ raw snapshot, call ID, and source line. Any file change invalidates it.
 [exact call retrieval](evidence-retrieval.md) for formats, offsets, and limits.
 
 `messages` and `search` share analysis session selection and JSONL/JSON/TSV
-formats, defaulting to 20 rows and 240-character text slices. `message` returns
+formats, defaulting to 20 rows and 240-character text slices (`--full` returns
+complete text). Message rows carry `kind` (`human`, `injected`,
+`skill-expansion`, `notification`, `agent`, `tool`, `unknown`) and search hits
+carry `messageKind`; `--kind` filters on it. `message` returns
 JSON with a bounded neighborhood, text continuation, and omitted-neighbor refs;
 it can also anchor from a call ref. Conversation queries offer `--page` counts,
 continuation, and failed-source metadata. Search cites matched Claude text/call

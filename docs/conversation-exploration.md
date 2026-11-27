@@ -30,9 +30,11 @@ dvdst message /path/to/session.jsonl --seq 42 --before 1 --after 1 --limit 1000
 message. `--role` accepts comma-separated `user`, `assistant`, `toolResult`,
 `system`, or `developer`, or `all`. Filtering never renumbers messages: `seq`
 addresses the complete canonical conversation, including tool-only messages.
+Add `--full` to return complete text instead of a prefix; see
+[full text](#full-text).
 
 Each row has session/source/path, canonical ID and sequence, source line/byte
-ranges, role, recorded `channel`, assistant turn and user-turn indices, bounded
+ranges, role, message `kind`, recorded `channel`, assistant turn and user-turn indices, bounded
 `text`, and snapshot-pinned `ref`. `callIds`/`callRefs` link assistant messages
 to tools. `resultCallId`/`resultCallRef` link results to uniquely identified
 calls. Orphans retain text and IDs with null call refs. Unknown tools remain
@@ -49,6 +51,45 @@ Claude can merge several entries into one canonical message. Its row's `line`,
 `byteStart`, and `byteEnd` describe the first entry; `sources` includes other
 entries supporting text and calls. These are raw JSONL entry ranges, not byte
 offsets into decoded strings.
+
+## Message kinds
+
+User-role text mixes what a person typed with material the harness, client, or
+a parent agent placed there. Every message row carries `kind`, and every search
+hit carries the enclosing message's `messageKind` (`kind` there already names
+the hit target):
+
+| kind | Meaning |
+| --- | --- |
+| `human` | Entered through the agent's prompt path and carries no harness marker. |
+| `injected` | Instructions or context the harness, client, or a parent agent added: AGENTS.md blocks, system reminders, Codex environment/permission/compaction-replay items, handoff and delegation prompts. System and developer messages are always `injected`. |
+| `skill-expansion` | An expanded skill block, recognized with the same grammar the `skills` command counts as an explicit invocation. |
+| `notification` | Command echoes, task or background-command notifications, interrupt markers. |
+| `agent` / `tool` | Assistant messages and tool results. |
+| `unknown` | User-role text with no structural signal and no marker. It is never guessed as `human`. |
+
+Classification uses record structure first, per source:
+
+- **Pi:** user `message` entries are prompts (extensions write separate custom
+  entries). Skill expansions are distinguished by their block grammar.
+- **Claude Code:** conversion already drops `isMeta`, compact-summary,
+  command-wrapper, task-notification and interrupt entries; surviving prompts
+  entered through the prompt path. Skill expansions loaded as meta entries are
+  therefore absent, not classified.
+- **Codex:** inputs echoed by an `event_msg` `user_message` or `item_completed`
+  `UserMessage` are prompts; user items without an echo (AGENTS.md, compaction
+  replays) are `injected`. A file with no echoes gives no structural signal.
+
+Anchored text markers then refine a prompt into `notification`, `injected`, or
+`skill-expansion`, or decide when structure is silent. `human` is not verified
+authorship: a parent agent or script that submits through the same prompt path
+(for example a Pi sub-agent launch) cannot be told apart. Codex's
+`<skill><name>` block format is not parsed by the skills grammar and is
+reported as `injected`.
+
+`--kind` takes comma-separated kinds and combines with `--role`; `search`
+filters by the enclosing message's kind. For example, to read only what was
+typed: `dvdst messages "$SESSION" --role user --kind human --full`.
 
 ## Literal search
 
@@ -71,7 +112,7 @@ Use `--role all` to include system/developer message text.
 
 There is one hit per matching canonical message, command, or result, at its
 first match. Hits follow canonical message order, with text before commands
-for an assistant message. Each has `kind`, `role`, `channel`, matching `sources`
+for an assistant message. Each has `kind`, `role`, `messageKind`, `channel`, matching `sources`
 and first matching source `line`, a `match` offset/length, and bounded excerpt.
 For merged Claude messages the hit line can be later than the message's first
 line. Cross-block matches cite multiple entries; joining newlines are rendering
@@ -82,6 +123,23 @@ reader for `ref`: `call` for commands/joined results, `message` for conversation
 text/orphan results. `message --ref` also accepts a call ref to anchor at its
 requesting assistant message. A recorded statement does not prove a decision
 was followed or a change accepted.
+
+## Full text
+
+`--text-limit` bounds each `text`/`excerpt` to 1–4096 code points (default
+240). `--full` instead returns complete text, with no upper bound, in the same
+`TextSlice` shape: `offset` 0, accurate `totalChars`, `nextOffset` null and
+`truncated` false. For `search` the excerpt becomes the whole matched text,
+and `match.offset` locates the hit inside it. `--full` and `--text-limit` are
+mutually exclusive. Without `--full`, `truncated` and `totalChars` still report
+what was cut, so a bounded pass can find which rows need a full one:
+
+```bash
+dvdst messages "$SESSION" --role assistant --full --fields seq,ref,text
+```
+
+Full text can be large; project only the fields you need and page with
+`--limit`/`--offset`.
 
 ## Neighborhoods and continuation
 
@@ -106,7 +164,8 @@ They do not join forks or missing history.
 
 `messages`/`search` default to JSONL; `--format json` writes an array and
 `--format tsv` writes schema-ordered columns. Both accept `--fields`, `--limit`
-(rows), `--offset` (rows), and `--text-limit` (1–4096 characters). Pagination
+(rows), `--offset` (rows), and `--text-limit` (1–4096 characters) or `--full`
+(complete text), plus `--role` and `--kind` filters. Pagination
 follows filtering across selected files. Bounded `text`/`excerpt` projection
 needs no `--full`. Complete files are still parsed: no text index, parser-memory
 bound, or use of the payload-free row cache is implied.
@@ -126,8 +185,10 @@ pagination, not snapshot cursors; refresh discovery if selected files change.
 the CLI. Listing/search return typed `{rows, matched, nextOffset}` pages with
 the same defaults. `conversationFromSession` reuses a fully loaded `SessionData`.
 Loaded conversations include full text for local computation; only query/read
-results apply output limits. Schemas are exported as `MESSAGES_SCHEMA`,
-`SEARCH_SCHEMA`, and `MESSAGE_SCHEMA`.
+results apply output limits; pass `full: true` for complete text and `kinds`
+to filter. `MESSAGE_KINDS` and `classifyMessage` expose the kind vocabulary and
+classifier. Schemas are exported as `MESSAGES_SCHEMA`, `SEARCH_SCHEMA`, and
+`MESSAGE_SCHEMA`.
 
 ## Related evidence
 

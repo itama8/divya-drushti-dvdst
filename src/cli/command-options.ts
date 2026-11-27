@@ -64,10 +64,11 @@ export const CLI_OPTIONS = {
   call: { id: s("Exact call ID; use seq if ambiguous."), seq, ref,
     limit: { ...textLimit, effectiveDefault: 4096 }, "args-offset": textOffset, "result-offset": textOffset, "command-offset": textOffset, help },
   conversation: {
-    ...selection, role, query: s("Nonempty literal search string, not a user regex.", { minLength: 1 }),
+    ...selection, role, kind: s("Comma-separated message kinds to keep: human,injected,skill-expansion,notification,agent,tool,unknown. Search filters by the enclosing message's kind; combines with --role.", { defaultDescription: "All kinds." }), query: s("Nonempty literal search string, not a user regex.", { minLength: 1 }),
     in: s("Search target.", { choices: ["messages", "commands", "results", "all"], effectiveDefault: "messages" }),
     "ignore-case": b("Use Unicode simple case folding for literal search."), ...rows,
-    "text-limit": s("Characters per returned prefix/excerpt.", { valueType: "integer", minimum: 1, maximum: 4096, effectiveDefault: 240 }),
+    "text-limit": s("Characters per returned prefix/excerpt; mutually exclusive with --full.", { valueType: "integer", minimum: 1, maximum: 4096, effectiveDefault: 240 }),
+    full: b("Return complete message text (search: the whole matched text as the excerpt) with no character bound; mutually exclusive with --text-limit."),
     format: rowFormat, page: b("Return JSON counts, nextOffset, completeness, and failed sources; implies JSON format."),
     ref, seq, before: s("Canonical messages before the anchor.", { valueType: "integer", minimum: 0, maximum: 10, effectiveDefault: 2 }),
     after: s("Canonical messages after the anchor.", { valueType: "integer", minimum: 0, maximum: 10, effectiveDefault: 2 }),
@@ -115,8 +116,8 @@ export const CLI_OPTIONS = {
 
 export const CONVERSATION_ALLOWED = {
   message: ["ref", "seq", "before", "after", "limit", "text-offset", "format", "help"],
-  messages: ["source", "project", "root", "last", "since", "role", "limit", "offset", "text-limit", "fields", "format", "page", "help"],
-  search: ["source", "project", "root", "last", "since", "role", "limit", "offset", "text-limit", "fields", "format", "page", "query", "in", "ignore-case", "help"],
+  messages: ["source", "project", "root", "last", "since", "role", "kind", "limit", "offset", "text-limit", "full", "fields", "format", "page", "help"],
+  search: ["source", "project", "root", "last", "since", "role", "kind", "limit", "offset", "text-limit", "full", "fields", "format", "page", "query", "in", "ignore-case", "help"],
 } as const;
 
 export function pickOptions(options: Record<string, CatalogOption>, names: readonly string[]): Record<string, CatalogOption> {

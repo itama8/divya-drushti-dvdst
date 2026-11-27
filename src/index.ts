@@ -12,6 +12,7 @@ export { getCapabilities } from "./capabilities.js";
 export { readCall, sliceText, CALL_SCHEMA, type ReadCallOptions, type TextSlice } from "./analysis/read-call.js";
 export { loadConversation, conversationFromSession, listMessages, searchConversation, readMessage, type Conversation, type ConversationMessage, type ConversationQueryOptions, type EvidencePage, type MessageMetadata, type MessageRow, type ReadMessageOptions, type RoleSelection, type SearchHit, type SearchOptions, type SearchScope } from "./analysis/conversation.js";
 export { MESSAGES_SCHEMA, MESSAGE_SCHEMA, SEARCH_SCHEMA } from "./analysis/conversation-schema.js";
+export { MESSAGE_KINDS, classifyMessage, type KindSelection, type MessageKind } from "./analysis/message-kind.js";
 export { deriveRows, STREAMS, ROWS_SCHEMA_VERSION, type FieldSpec, type Row, type SessionRows, type StreamName, type StreamSpec } from "./analysis/rows.js";
 export { findExtractor, listExtractorFiles, loadExtractorFile, type Extractor, type LoadedExtractor } from "./analysis/extractors.js";
 export { resolveSession, resolveSessions, SessionResolveError, type ResolveSessionsOptions } from "./pi/resolve-sessions.js";
