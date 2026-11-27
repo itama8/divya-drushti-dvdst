@@ -59,7 +59,8 @@ async function main(): Promise<void> {
     options: parserOptions(CLI_OPTIONS.sessionStage), strict: true,
   });
   if (values.help) {
-    console.log("Usage: dvdst session-stage --agent pi|claude|codex [--session <id> | --session-file <file>] [--repository <dir>] [--manifest <file>] [--after <result-event-id>] [--dry-run | --list]");
+    console.error("Usage: dvdst session-stage --agent pi|claude|codex [--session <id> | --session-file <file>] [--repository <dir>] [--manifest <file>] [--after <result-event-id>] [--dry-run | --list]");
+    console.error("Discovery without --session-file: Pi uses PI_SESSION_FILE, else PI_SESSION_ID; Claude uses CLAUDE_CODE_SESSION_ID; Codex uses CODEX_THREAD_ID. Bash edits are never attributed or staged. Never commits.");
     return;
   }
   const agent = values.agent;

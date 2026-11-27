@@ -198,6 +198,10 @@ snapshot descriptor; findings are in `<snapshot>/events/deterministic.jsonl`.
 Staging is a separate optional index mutation workflow. Consult
 `docs/session-staging.md` in the checkout before using it; normal reviewed Git
 staging is also supported. Analysis does not require staging.
+`dvdst session-stage --agent pi|claude|codex` replays one session's successful
+edit/write (or Codex patch) calls into the index from its transcript; start
+with `--list` and `--dry-run`. In Pi, the transcript comes from
+`PI_SESSION_FILE`. Bash edits are never attributed or staged.
 
 ## 4. When no stream answers it
 

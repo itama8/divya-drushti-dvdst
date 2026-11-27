@@ -408,11 +408,11 @@ mutation. No frame is emitted for a settled period without mutations.
 The minimum interval is 100 ms. Restarting replays existing records.
 See [review frames](live-streams.md#review-frames) for fields and limits.
 
-For Claude Code and Codex staging, use `dvdst session-stage --agent
-claude|codex`. See [session staging](session-staging.md) for verified discovery,
-mutation selectors, paginated Codex evidence, and `--after` cursors. Codex
-support here applies to staging, while the analysis rows support Pi and
-Claude Code.
+For transcript staging with discovery and selector listing, use
+`dvdst session-stage --agent pi|claude|codex`. See
+[session staging](session-staging.md) for verified discovery (including Pi's
+`PI_SESSION_FILE`/`PI_SESSION_ID`), mutation selectors, paginated Codex
+evidence, and `--after` cursors.
 
 ## 7. Ingest sessions into the evidence store
 
